@@ -1,0 +1,42 @@
+{
+  "seed": 1337,
+  "device": "auto",
+  "gpu_memory_fraction": 0.70,
+  "model": {
+    "max_seq_len": 256,
+    "d_model": 64,
+    "n_layers": 2,
+    "n_heads": 4,
+    "ffn_mult": 4,
+    "dropout": 0.0,
+    "attention_topology": "block_causal",
+    "option_pool": "end",
+    "state_pool": "last",
+    "decision_head": "pointer",
+    "gradient_checkpointing": false
+  },
+  "data": {
+    "train": "data/train.jsonl",
+    "dev": "data/dev.jsonl",
+    "max_state_bytes": 96,
+    "max_question_bytes": 56,
+    "max_option_bytes": 32
+  },
+  "training": {
+    "batch_size": 4,
+    "gradient_accumulation": 1,
+    "max_steps": 8,
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "loss": "ce_brier",
+    "brier_weight": 0.25,
+    "fp16": true,
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "batch_size": 8,
+    "permutation_examples": 8,
+    "benchmark_repeats": 2
+  }
+}
+

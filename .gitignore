@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.venv/
+data/*.jsonl
+data/manifest.json
+data/vault/
+checkpoints/
+results/runs/
+research/experiment_log.jsonl

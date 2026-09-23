@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jevlet"
+version = "0.1.0"
+description = "Tiny Jev-inspired calibrated decision-model research platform"
+requires-python = ">=3.11"
+dependencies = ["torch>=2.3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8"]
+pretrained = ["transformers>=4.46"]
+
+[tool.setuptools.packages.find]
+include = ["jevlet*", "research*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --basetemp=.pytest_tmp"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

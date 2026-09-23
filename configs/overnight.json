@@ -1,0 +1,60 @@
+{
+  "seed": 1337,
+  "device": "auto",
+  "gpu_memory_fraction": 0.80,
+  "model": {
+    "max_seq_len": 384,
+    "d_model": 256,
+    "n_layers": 4,
+    "n_heads": 4,
+    "ffn_mult": 8,
+    "dropout": 0.1,
+    "attention_topology": "block_causal",
+    "option_pool": "end",
+    "state_pool": "last",
+    "decision_head": "pointer",
+    "gradient_checkpointing": true
+  },
+  "data": {
+    "train": "data/train.jsonl",
+    "dev": "data/dev.jsonl",
+    "max_state_bytes": 128,
+    "max_question_bytes": 64,
+    "max_option_bytes": 48
+  },
+  "training": {
+    "batch_size": 2,
+    "gradient_accumulation": 16,
+    "max_steps": 120,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.01,
+    "loss": "ce",
+    "brier_weight": 0.25,
+    "label_smoothing": 0.05,
+    "fp16": true,
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "batch_size": 4,
+    "permutation_examples": 32,
+    "benchmark_repeats": 5
+  },
+  "research": {
+    "hours": 8.0,
+    "final_reserve_hours": 2.0,
+    "stage_steps": [120, 600, 1800],
+    "stage_max_seconds": [420, 1200, 2700],
+    "promotions": [8, 3],
+    "final_steps": 3000,
+    "final_seeds": [1337, 7331],
+    "final_model": {
+      "max_seq_len": 512,
+      "d_model": 384,
+      "n_layers": 6,
+      "n_heads": 6,
+      "ffn_mult": 7,
+      "gradient_checkpointing": true
+    },
+    "log": "research/experiment_log.jsonl"
+  }
+}
