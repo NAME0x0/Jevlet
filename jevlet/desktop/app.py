@@ -172,8 +172,10 @@ class DesktopApp:
             )
             confidence = getattr(choice, "confidence", None)
             gate = getattr(result, "gate", None)
+            risk = getattr(result, "risk", None)
             detail = f" ({confidence:.0%} confidence)" if isinstance(confidence, float) else ""
             detail += f"; {gate}" if gate else ""
+            detail += f"; risk {risk:.0%}" if isinstance(risk, float) else ""
             self.status.set(
                 f"Suggested route: {self.last_suggestion}{detail}. No action was taken."
             )

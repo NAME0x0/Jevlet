@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from jevlet import public_data
 from jevlet.public_data import SPECS, convert_record, download_public_data
 from notebooks.colab_runtime import CheckpointSync, restore_checkpoint
 
@@ -60,6 +61,45 @@ def test_public_split_is_disjoint_and_pinned(tmp_path) -> None:
         assert all(row["split"] == split for row in rows)
         fingerprints.extend(row["metadata"]["source_fingerprint"] for row in rows)
     assert len(fingerprints) == len(set(fingerprints))
+
+
+def test_clinc_out_of_scope_becomes_explicit_abstain_option() -> None:
+    spec = SPECS["clinc"]
+    rows = [{"text": f"q{index}", "label_text": f"intent_{index}"} for index in range(8)]
+    vocabulary = public_data._intent_vocabulary(rows + [{"text": "x", "label_text": "oos"}], spec)
+    assert "oos" not in vocabulary
+    in_scope = convert_record(spec, rows[3], "train", 9, intent_vocabulary=vocabulary)
+    oos = convert_record(
+        spec, {"text": "sing me a song", "label_text": "oos"}, "train", 9, None, vocabulary
+    )
+    assert in_scope is not None and oos is not None
+    question = in_scope.questions[0]
+    assert question.options[question.label] == "intent 3"
+    assert question.options[-1] == public_data.OUT_OF_SCOPE_OPTION and not question.is_unknown
+    abstain = oos.questions[0]
+    assert abstain.options[abstain.label] == public_data.OUT_OF_SCOPE_OPTION
+    assert abstain.is_unknown and len(abstain.options) == spec.max_options + 1
+
+
+def test_intent_loader_receives_subset_config(tmp_path) -> None:
+    calls = []
+
+    def loader(repo, split, revision, seed, config=None, label_column=None):
+        calls.append((split, config, label_column))
+        return [
+            {"text": f"{split} wake me at {i}", "label_text": f"alarm_{i % 7}"} for i in range(60)
+        ]
+
+    download_public_data(
+        tmp_path,
+        ["massive"],
+        train_limit=10,
+        dev_limit=2,
+        vault_limit=2,
+        info_fn=lambda repo: {"sha": "b" * 40, "license": "apache-2.0"},
+        loader_fn=loader,
+    )
+    assert calls == [("train", "en", "label"), ("test", "en", "label")]
 
 
 def test_unknown_license_requires_opt_in(tmp_path) -> None:

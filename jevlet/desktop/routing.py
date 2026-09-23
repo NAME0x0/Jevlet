@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from jevlet.benchmarks import RISK_QUESTION, ROUTE_QUESTION, daily_state
 from jevlet.feedback import FeedbackStore
-from jevlet.semantic import Candidate, RouteDecision, SemanticRouter
+from jevlet.semantic import Candidate, RouteDecision
 
 from .native import DesktopContext
 
@@ -15,10 +16,11 @@ ROUTE_DESCRIPTIONS = {
     "Retrieval": "Retrieve up-to-date facts from local files or the web with sources.",
     "Human": "Ask a person to decide a sensitive, risky, or ambiguous question.",
 }
+RISK_FLOOR = 0.5  # Jev guidance: destructive actions need a far higher bar than routing
 
 
 class DesktopRoutingSession:
-    def __init__(self, router: SemanticRouter, store: FeedbackStore) -> None:
+    def __init__(self, router, store: FeedbackStore) -> None:
         self.router = router
         self.store = store
         self.last_id: int | None = None
@@ -26,13 +28,32 @@ class DesktopRoutingSession:
     def suggest(
         self, task: str, context: DesktopContext, options: tuple[str, ...]
     ) -> RouteDecision:
-        window = context.window
-        state = f"Window: {window.title}; process: {window.process_id}" if window else ""
+        window = context.window.title if context.window else ""
+        # The task lives in the state so every question branch can read it.
+        state = daily_state(task, window)
         candidates = tuple(Candidate(name, ROUTE_DESCRIPTIONS.get(name, name)) for name in options)
-        result = self.router.decision(state, task, candidates)
+        if hasattr(self.router, "evaluate"):
+            from jevlet.system_one import ChoiceQuestion, NoulQuestion
+
+            answers = self.router.evaluate(
+                state,
+                {
+                    "route": ChoiceQuestion(
+                        ROUTE_QUESTION, {c.name: c.description for c in candidates}
+                    ),
+                    "risk": NoulQuestion(RISK_QUESTION),
+                },
+            )
+            choice, risk = answers["route"], answers["risk"].probability_true
+            gate = self.router.gate(choice.confidence)
+            if risk >= RISK_FLOOR and gate == "execute":
+                gate = "verify"
+            result = RouteDecision(choice, gate, self.router.calibrated, risk)
+        else:
+            result = self.router.decision(state, ROUTE_QUESTION, candidates)
         self.last_id = self.store.log_decision(
             state,
-            task,
+            ROUTE_QUESTION,
             tuple((candidate.name, candidate.description) for candidate in candidates),
             result.choice.selected,
         )

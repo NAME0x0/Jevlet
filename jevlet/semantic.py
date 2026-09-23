@@ -72,6 +72,7 @@ class RouteDecision:
     choice: Choice
     gate: str
     calibrated: bool
+    risk: float | None = None  # P(task is risky), when the router answers that question
 
 
 @dataclass(frozen=True, slots=True)

@@ -27,6 +27,15 @@ class PublicDatasetSpec:
     license_note: str
     labels: tuple[str, ...] = ()
     max_options: int = 5
+    # ``intent`` specs sample distractors from observed text labels (MASSIVE, CLINC150).
+    task: str = "fixed"
+    config: str | None = None
+    label_column: str = "label"
+    unknown_label: str | None = None
+    question: str = ""
+
+
+OUT_OF_SCOPE_OPTION = "none of these (out of scope)"
 
 
 SPECS: dict[str, PublicDatasetSpec] = {
@@ -78,6 +87,30 @@ SPECS: dict[str, PublicDatasetSpec] = {
         "Dataset card lists license as other; review terms before redistribution.",
         ("1 star", "2 stars", "3 stars", "4 stars", "5 stars"),
     ),
+    "massive": PublicDatasetSpec(
+        "massive",
+        "mteb/amazon_massive_intent",
+        "train",
+        "test",
+        "MTEB mirror says Apache-2.0; original Amazon MASSIVE data says CC-BY-4.0.",
+        max_options=6,
+        task="intent",
+        config="en",
+        question="Which assistant action does the user want?",
+    ),
+    "clinc": PublicDatasetSpec(
+        "clinc",
+        "clinc/clinc_oos",
+        "train",
+        "test",
+        "CC-BY-3.0.",
+        max_options=6,
+        task="intent",
+        config="plus",
+        label_column="intent",
+        unknown_label="oos",
+        question="Which supported intent matches the request, if any?",
+    ),
 }
 
 UNKNOWN_LICENSE = frozenset({"ag_news", "sst2", "yelp"})
@@ -119,14 +152,61 @@ def _banking_labels(rows: Iterable[Mapping[str, Any]]) -> dict[int, str]:
     return mapping
 
 
+def _intent_name(row: Mapping[str, Any], spec: PublicDatasetSpec) -> str:
+    raw = row.get("label_text", row.get(spec.label_column))
+    return " ".join(str(raw).replace("_", " ").split()).casefold()
+
+
+def _intent_vocabulary(rows: Iterable[Mapping[str, Any]], spec: PublicDatasetSpec) -> list[str]:
+    unknown = spec.unknown_label.replace("_", " ") if spec.unknown_label else None
+    names = sorted({_intent_name(row, spec) for row in rows} - {unknown})
+    if len(names) < spec.max_options:
+        raise ValueError(f"{spec.name} sample has too few intents for {spec.max_options} options")
+    return names
+
+
+def _convert_intent(
+    spec: PublicDatasetSpec, row: Mapping[str, Any], split: str, seed: int, vocabulary: list[str]
+) -> DecisionExample | None:
+    name = _intent_name(row, spec)
+    unknown = spec.unknown_label.replace("_", " ") if spec.unknown_label else None
+    is_unknown = name == unknown
+    if not is_unknown and name not in vocabulary:
+        return None
+    fingerprint = _identity(spec.name, row)
+    rng = random.Random(seed ^ int(fingerprint[:16], 16))
+    distractor_count = spec.max_options - (0 if is_unknown else 1)
+    pool = [intent for intent in vocabulary if intent != name]
+    options = rng.sample(pool, distractor_count) + ([] if is_unknown else [name])
+    rng.shuffle(options)
+    if unknown is not None:
+        options.append(OUT_OF_SCOPE_OPTION)
+    answer = OUT_OF_SCOPE_OPTION if is_unknown else name
+    return DecisionExample(
+        example_id=f"{spec.name}-{fingerprint[:20]}",
+        state=str(row["text"]),
+        questions=[Question(spec.question, options, options.index(answer), is_unknown=is_unknown)],
+        family=f"public_{spec.name}",
+        domain=spec.name,
+        split=split,
+        is_ood=False,
+        metadata={"source_repo": spec.repo, "source_fingerprint": fingerprint},
+    )
+
+
 def convert_record(
     spec: PublicDatasetSpec,
     row: Mapping[str, Any],
     split: str,
     seed: int,
     banking_labels: Mapping[int, str] | None = None,
+    intent_vocabulary: list[str] | None = None,
 ) -> DecisionExample | None:
     """Convert a labeled public row; return None for hidden/unlabeled test rows."""
+    if spec.task == "intent":
+        if intent_vocabulary is None:
+            raise ValueError(f"{spec.name} conversion needs the intent vocabulary")
+        return _convert_intent(spec, row, split, seed, intent_vocabulary)
     label = int(row["answer"] if spec.name == "boolq" else row["label"])
     if label < 0:
         return None
@@ -184,13 +264,24 @@ def _default_info(repo: str) -> Mapping[str, Any]:
     return {"sha": info.sha, "license": card.get("license") if card else None}
 
 
-def _default_loader(repo: str, split: str, revision: str, seed: int) -> Iterable[Mapping[str, Any]]:
-    from datasets import load_dataset
+def _default_loader(
+    repo: str,
+    split: str,
+    revision: str,
+    seed: int,
+    config: str | None = None,
+    label_column: str | None = None,
+) -> Iterable[Mapping[str, Any]]:
+    from datasets import ClassLabel, load_dataset
 
     # A bounded streaming shuffle can only see early rows of class-sorted sources
     # (notably BANKING77 and AG News). Materialize Arrow on disk, then globally
     # shuffle its indices; source_rows below remains bounded in Python memory.
-    dataset = load_dataset(repo, split=split, revision=revision)
+    dataset = load_dataset(repo, config, split=split, revision=revision)
+    feature = dataset.features.get(label_column) if label_column else None
+    if isinstance(feature, ClassLabel) and "label_text" not in dataset.column_names:
+        names = feature.names
+        dataset = dataset.map(lambda row: {"label_text": names[row[label_column]]})
     return dataset.shuffle(seed=seed)
 
 
@@ -205,7 +296,7 @@ def download_public_data(
     allow_unknown_license: bool = False,
     revisions: Mapping[str, str] | None = None,
     info_fn: Callable[[str], Mapping[str, Any]] = _default_info,
-    loader_fn: Callable[[str, str, str, int], Iterable[Mapping[str, Any]]] = _default_loader,
+    loader_fn: Callable[..., Iterable[Mapping[str, Any]]] = _default_loader,
 ) -> dict[str, Any]:
     """Build immutable-by-hash train/dev/vault files from pinned source revisions.
 
@@ -236,10 +327,16 @@ def download_public_data(
             raise ValueError(f"{spec.repo} did not resolve to a pinned 40-digit revision")
         # Keep the in-memory Python sample bounded after Arrow's global shuffle.
         scan_limit = max(5000, 12 * (train_limit + dev_limit))
+        extra = (
+            {"config": spec.config, "label_column": spec.label_column}
+            if spec.task == "intent"
+            else {}
+        )
         source_rows = list(
-            islice(loader_fn(spec.repo, spec.train_split, revision, seed), scan_limit)
+            islice(loader_fn(spec.repo, spec.train_split, revision, seed, **extra), scan_limit)
         )
         labels = _banking_labels(source_rows) if name == "banking77" else None
+        vocabulary = _intent_vocabulary(source_rows, spec) if spec.task == "intent" else None
         counts = {"train": 0, "dev": 0, "vault": 0, "duplicates": 0, "invalid": 0}
         # Fixed hash partition prevents sampling order from changing split membership.
         for row in source_rows:
@@ -251,7 +348,7 @@ def download_public_data(
             if fingerprint in seen:
                 counts["duplicates"] += 1
                 continue
-            example = convert_record(spec, row, split, seed, labels)
+            example = convert_record(spec, row, split, seed, labels, vocabulary)
             if example is None:
                 counts["invalid"] += 1
                 continue
@@ -260,14 +357,14 @@ def download_public_data(
             counts[split] += 1
             if counts["train"] >= train_limit and counts["dev"] >= dev_limit:
                 break
-        for row in loader_fn(spec.repo, spec.vault_split, revision, seed + 1):
+        for row in loader_fn(spec.repo, spec.vault_split, revision, seed + 1, **extra):
             if counts["vault"] >= vault_limit:
                 break
             fingerprint = _identity(name, row)
             if fingerprint in seen:
                 counts["duplicates"] += 1
                 continue
-            example = convert_record(spec, row, "vault", seed, labels)
+            example = convert_record(spec, row, "vault", seed, labels, vocabulary)
             if example is None:
                 counts["invalid"] += 1
                 continue

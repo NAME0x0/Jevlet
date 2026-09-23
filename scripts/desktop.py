@@ -22,6 +22,9 @@ def main() -> None:
     parser.add_argument("--router-db", type=Path, default=Path("data/feedback.sqlite3"))
     parser.add_argument("--adapter", type=Path, default=Path("data/router_adapter.json"))
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--checkpoint", type=Path, help="Jevlet System-One checkpoint (default: zero-shot router)"
+    )
     parser.add_argument("--manual", action="store_true", help="Open desktop controls without model")
     args = parser.parse_args()
     if os.name != "nt":
@@ -32,9 +35,14 @@ def main() -> None:
         if sys.stdout is not None:
             print("Loading the local routing model; first use may download it.", flush=True)
         store = FeedbackStore(args.router_db)
-        router = SemanticRouter(
-            model_name=args.model, feedback_store=store, adapter_path=args.adapter
-        )
+        if args.checkpoint:
+            from jevlet.system_one import SystemOne
+
+            router = SystemOne(str(args.checkpoint))
+        else:
+            router = SemanticRouter(
+                model_name=args.model, feedback_store=store, adapter_path=args.adapter
+            )
         session = DesktopRoutingSession(router, store)
         decide = session.suggest
         on_rate = session.rate

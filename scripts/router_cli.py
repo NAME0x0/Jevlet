@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--db", default="data/feedback.sqlite3", help="Local SQLite feedback file")
     parser.add_argument("--adapter", default="data/router_adapter.json")
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--checkpoint", help="Route with a Jevlet System-One checkpoint instead")
     commands = parser.add_subparsers(dest="command", required=True)
     route = commands.add_parser("route", help="Suggest a destination; never invokes it")
     route.add_argument("--state", default="")
@@ -45,7 +46,16 @@ def main() -> None:
         store.submit_feedback(args.id, approved=args.up, corrected_option=args.correct)
         print(json.dumps({"recorded": True, "training_label": args.up or args.correct is not None}))
         return
-    router = SemanticRouter(model_name=args.model, feedback_store=store, adapter_path=args.adapter)
+    if args.checkpoint:
+        if args.command == "adapt":
+            parser.error("adapt tunes the zero-shot router; retrain checkpoints instead")
+        from jevlet.system_one import SystemOne
+
+        router = SystemOne(args.checkpoint)
+    else:
+        router = SemanticRouter(
+            model_name=args.model, feedback_store=store, adapter_path=args.adapter
+        )
     if args.command == "adapt":
         report = router.adapt(store, args.adapter)
         print(json.dumps(asdict(report)))
