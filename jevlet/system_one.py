@@ -80,6 +80,7 @@ class SystemOne:
         if not 0 < verify_threshold <= execute_threshold <= 1:
             raise ValueError("confidence thresholds must satisfy 0 < verify <= execute <= 1")
         self.device = resolve_device(device)
+        self.checkpoint_path = str(checkpoint)
         self.model, payload = load_checkpoint(checkpoint, self.device)
         self.temperature = float(payload.get("temperature", 1.0))
         self.collator = build_collator(self.model, payload.get("training_config", {}).get("data"))

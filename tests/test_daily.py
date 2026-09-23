@@ -26,6 +26,27 @@ def test_generator_is_deterministic_and_well_formed(tmp_path) -> None:
             assert row["domain"] == "Human" and route["is_unknown"]
 
 
+def test_generator_is_identical_across_processes(tmp_path) -> None:
+    import os
+    import subprocess
+    import sys
+
+    digests = []
+    for hash_seed in ("1", "2"):
+        output = tmp_path / hash_seed
+        code = (
+            "from jevlet.daily_synthetic import generate_daily_dataset as g; "
+            f"print(g(r'{output}', counts=(400, 10, 10), seed=3)['splits']['train']['sha256'])"
+        )
+        environment = {**os.environ, "PYTHONHASHSEED": hash_seed}
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, env=environment
+        )
+        assert result.returncode == 0, result.stderr
+        digests.append(result.stdout.strip())
+    assert digests[0] == digests[1]
+
+
 def test_benchmark_sentences_never_appear_in_training_data() -> None:
     rng = random.Random(0)
     states = " ".join(_example(rng, "train", index).state.casefold() for index in range(4000))

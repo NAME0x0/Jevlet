@@ -57,20 +57,20 @@ class CheckpointSync:
             if not info.private:
                 raise ValueError("HF checkpoint repo must be private")
 
+    def _wanted(self, path: Path) -> bool:
+        """Everything needed to resume or deploy: checkpoints, run JSON, logs, exports."""
+        if not path.is_file():
+            return False
+        parts = path.relative_to(self.local_root).parts
+        if "export" in parts:
+            return True
+        if path.name == "best.pt":
+            # Research resumes from last.pt; per-candidate best.pt would multiply storage.
+            return "research" not in parts
+        return path.name == "last.pt" or path.suffix in {".json", ".jsonl"}
+
     def _files(self) -> list[Path]:
-        names = {
-            "last.pt",
-            "best.pt",
-            "metrics.json",
-            "config.json",
-            "summary.json",
-            "dataset_manifest.json",
-        }
-        return sorted(
-            path
-            for path in self.local_root.rglob("*")
-            if path.is_file() and (path.name in names or path.name.endswith(".jsonl"))
-        )
+        return sorted(path for path in self.local_root.rglob("*") if self._wanted(path))
 
     def sync_once(self) -> dict[str, str]:
         completed: dict[str, str] = {}
@@ -123,6 +123,40 @@ class CheckpointSync:
         if self.errors:
             raise RuntimeError(f"intermediate checkpoint sync failed: {self.errors}")
         return final
+
+
+def restore_tree(
+    relative_dir: str,
+    local_root: str | Path,
+    *,
+    drive_root: str | Path | None = None,
+    hf_repo_id: str | None = None,
+) -> int:
+    """Restore every synced file under ``relative_dir`` (e.g. a research output tree)."""
+    local = Path(local_root)
+    if drive_root is not None:
+        remote_dir = Path(drive_root) / relative_dir
+        if not remote_dir.exists():
+            return 0
+        count = 0
+        for remote in remote_dir.rglob("*"):
+            if remote.is_file() and not remote.name.endswith(".uploading"):
+                target = local / remote.relative_to(drive_root)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(remote, target)
+                count += 1
+        return count
+    if hf_repo_id is not None:
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(
+            hf_repo_id,
+            repo_type="model",
+            local_dir=str(local),
+            allow_patterns=[f"{relative_dir.rstrip('/')}/**"],
+        )
+        return sum(1 for path in (local / relative_dir).rglob("*") if path.is_file())
+    raise ValueError("select Drive or HF persistence")
 
 
 def restore_checkpoint(

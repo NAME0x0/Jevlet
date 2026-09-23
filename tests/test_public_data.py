@@ -6,7 +6,7 @@ import pytest
 
 from jevlet import public_data
 from jevlet.public_data import SPECS, convert_record, download_public_data
-from notebooks.colab_runtime import CheckpointSync, restore_checkpoint
+from notebooks.colab_runtime import CheckpointSync, restore_checkpoint, restore_tree
 
 
 def test_banking_candidates_include_label_and_are_reproducible() -> None:
@@ -133,3 +133,24 @@ def test_drive_checkpoint_sync_and_restore(tmp_path) -> None:
     restored_manifest = restore_checkpoint("dataset_manifest.json", local, drive_root=remote)
     assert restored_manifest == manifest
     assert json.loads(restored_manifest.read_text()) == {"sources": {}}
+
+
+def test_research_tree_syncs_resume_state_but_not_candidate_best(tmp_path) -> None:
+    local, remote = tmp_path / "local", tmp_path / "drive"
+    run = local / "research" / "stage-1-p-baseline"
+    run.mkdir(parents=True)
+    for name in ("last.pt", "best.pt", "result.json", "last.pt.tmp"):
+        (run / name).write_bytes(name.encode())
+    (local / "export").mkdir()
+    (local / "export" / "daily.pt").write_bytes(b"slim")
+    synced = CheckpointSync(local, drive_root=remote).sync_once()
+    assert set(synced) == {
+        "research/stage-1-p-baseline/last.pt",
+        "research/stage-1-p-baseline/result.json",
+        "export/daily.pt",
+    }
+    fresh = tmp_path / "fresh"
+    assert restore_tree("research", fresh, drive_root=remote) == 2
+    assert (
+        fresh / "research" / "stage-1-p-baseline" / "result.json"
+    ).read_bytes() == b"result.json"

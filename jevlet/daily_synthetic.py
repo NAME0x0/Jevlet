@@ -318,7 +318,9 @@ def _example(rng: random.Random, split: str, index: int) -> DecisionExample:
         if soft is not None:
             keep |= {name for name, p in zip(ROUTES, soft, strict=True) if p > 0}
         others = [name for name in ROUTES if name not in keep]
-        routes = list(keep) + rng.sample(others, rng.randint(max(0, 3 - len(keep)), len(others)))
+        # Never iterate a set of strings here: its order changes with PYTHONHASHSEED.
+        kept = [name for name in ROUTES if name in keep]
+        routes = kept + rng.sample(others, rng.randint(max(0, 3 - len(kept)), len(others)))
     rng.shuffle(routes)
     described = rng.random() < 0.7
     options = [
