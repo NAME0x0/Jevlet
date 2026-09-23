@@ -21,6 +21,8 @@ class ControlInfo:
     name: str
     automation_id: str
     control_type: str
+    rect: tuple[int, int, int, int] | None = None
+    enabled: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,10 +83,26 @@ class NativeDesktop:
         user32.EnumWindows(collect, 0)
         return tuple(windows)
 
+    _fast_reader = None
+
     def observe(self, max_controls: int = 80) -> DesktopContext:
         window = self.active_window()
         if window is None:
             return DesktopContext(None, ())
+        try:
+            # One cached UIA query (~80 ms) instead of per-property calls (~600 ms).
+            from .uia import FastUIA
+
+            if NativeDesktop._fast_reader is None:
+                NativeDesktop._fast_reader = FastUIA()
+            elements = NativeDesktop._fast_reader.read(window.handle, max_controls)
+            controls = tuple(
+                ControlInfo(e.name, e.automation_id, e.control_type, e.rect, e.enabled)
+                for e in elements
+            )
+            return DesktopContext(window, controls)
+        except Exception:  # noqa: BLE001 - any COM failure falls back to pywinauto below
+            pass
         try:
             from pywinauto import Desktop
         except ImportError:
