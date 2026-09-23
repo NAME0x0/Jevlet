@@ -15,6 +15,80 @@ class Candidate:
     expected_mechanism: str
 
 
+def jevlet_p_candidates() -> list[Candidate]:
+    """Pretrained-backbone ablations. Each changes one axis of ``configs/pretrained_*.json``.
+
+    Grounded in TypeSafe's public description of Jev: questions are evaluated independently
+    against one shared state, options are runtime-defined with descriptions, and training
+    targets calibrated probabilities (RLCD) rather than rater preference.
+    """
+    return [
+        Candidate(
+            "p-baseline",
+            "baseline",
+            {},
+            "A pretrained encoder under the packed block-bidirectional topology is a strong base.",
+            "Pretrained semantics plus listwise option comparison inside each isolated branch.",
+        ),
+        Candidate(
+            "p-option-isolated",
+            "attention_topology",
+            {"model.attention_topology": "option_isolated"},
+            "Exact option-order invariance costs little accuracy and removes position bias.",
+            "Options share positions and cannot see each other; only [DECIDE] compares them.",
+        ),
+        Candidate(
+            "p-full-leaky",
+            "attention_topology",
+            {"model.attention_topology": "full"},
+            "Sibling isolation does not reduce accuracy relative to full cross-question attention.",
+            "If leakage helps, siblings carry shortcuts that isolated Jev-style calls lack.",
+        ),
+        Candidate(
+            "p-option-end",
+            "option_representation",
+            {"model.option_pool": "end"},
+            "The [END_OPTION] boundary state is as good as mean-pooled option tokens.",
+            "A learned boundary summary can replace pooling that the encoder was pretrained for.",
+        ),
+        Candidate(
+            "p-head-bilinear",
+            "decision_head",
+            {"model.decision_head": "bilinear"},
+            "A bilinear pointer aligns decision and option subspaces better than a dot product.",
+            "An extra learned matrix lets the head reweight semantic directions per decision.",
+        ),
+        Candidate(
+            "p-head-mlp",
+            "decision_head",
+            {"model.decision_head": "mlp"},
+            "A nonlinear compatibility head helps on entailment-style questions.",
+            "|decide - option| features expose mismatch directly to the scorer.",
+        ),
+        Candidate(
+            "p-loss-ce-brier",
+            "loss",
+            {"training.loss": "ce_brier"},
+            "Adding Brier to log-loss improves calibration at equal accuracy (an RLCD proxy).",
+            "Both are strictly proper scoring rules; Brier bounds the penalty on confident misses.",
+        ),
+        Candidate(
+            "p-loss-smoothing",
+            "loss",
+            {"training.loss": "label_smooth_ce"},
+            "Light label smoothing reduces overconfidence on public-data shift.",
+            "Softened targets cap logit growth on easy templated families.",
+        ),
+        Candidate(
+            "p-backbone-bge-small",
+            "backbone",
+            {"model.backbone": "BAAI/bge-small-en-v1.5"},
+            "A deeper retrieval-tuned 33M encoder improves semantic routing per millisecond.",
+            "Twelve layers and contrastive pretraining give sharper query-option alignment.",
+        ),
+    ]
+
+
 def night_one_candidates() -> list[Candidate]:
     return [
         Candidate(
@@ -122,3 +196,6 @@ def night_one_candidates() -> list[Candidate]:
             ),
         ),
     ]
+
+
+CANDIDATE_SETS = {"night_one": night_one_candidates, "jevlet_p": jevlet_p_candidates}

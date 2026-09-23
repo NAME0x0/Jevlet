@@ -5,7 +5,8 @@ import json
 
 from torch.utils.data import DataLoader
 
-from jevlet.data import DecisionCollator, JsonlDecisionDataset
+from jevlet.data import JsonlDecisionDataset
+from jevlet.families import build_collator
 from jevlet.metrics import compute_metrics
 from jevlet.training import collect_predictions, load_checkpoint, resolve_device
 
@@ -15,6 +16,7 @@ def main() -> None:
     parser.add_argument("checkpoint")
     parser.add_argument("--split", choices=("dev", "vault"), default="dev")
     parser.add_argument("--unlock-vault", action="store_true")
+    parser.add_argument("--data", help="Override the evaluation JSONL (vault still needs unlock)")
     parser.add_argument("--batch-size", type=int, default=4)
     args = parser.parse_args()
     if args.split == "vault" and not args.unlock_vault:
@@ -25,15 +27,11 @@ def main() -> None:
     data_config = training_config.get("data", {})
     data_path = data_config.get("dev", "data/dev.jsonl")
     if args.split == "vault":
-        data_path = "data/vault/vault.jsonl"
+        data_path = data_config.get("vault", "data/vault/vault.jsonl")
+    if args.data:
+        data_path = args.data
     dataset = JsonlDecisionDataset(data_path)
-    collator = DecisionCollator(
-        max_seq_len=model.config.max_seq_len,
-        attention_topology=model.config.attention_topology,
-        max_state_bytes=int(data_config.get("max_state_bytes", 128)),
-        max_question_bytes=int(data_config.get("max_question_bytes", 64)),
-        max_option_bytes=int(data_config.get("max_option_bytes", 48)),
-    )
+    collator = build_collator(model, data_config)
     loader = DataLoader(dataset, args.batch_size, collate_fn=collator, num_workers=0)
     logits, records, speed = collect_predictions(model, loader, device)
     metrics = compute_metrics(logits, records, float(payload.get("temperature", 1.0)))

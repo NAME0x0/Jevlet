@@ -13,7 +13,7 @@ from typing import Any
 from jevlet.training import train_experiment
 
 from .pareto import pareto_frontier, promotion_order
-from .search_space import Candidate, night_one_candidates
+from .search_space import CANDIDATE_SETS, Candidate
 
 
 def _nested_set(payload: dict[str, Any], dotted_key: str, value: Any) -> None:
@@ -84,7 +84,13 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     log_path = Path(config["research"].get("log", "research/experiment_log.jsonl"))
-    candidates = night_one_candidates()
+    candidate_set = config["research"].get("candidate_set", "night_one")
+    if candidate_set not in CANDIDATE_SETS:
+        raise ValueError(f"unknown research.candidate_set: {candidate_set}")
+    candidates = CANDIDATE_SETS[candidate_set]()
+    only = config["research"].get("candidates")
+    if only:
+        candidates = [candidate for candidate in candidates if candidate.candidate_id in only]
     by_id = {candidate.candidate_id: candidate for candidate in candidates}
     stage_steps = list(config["research"].get("stage_steps", [120, 600, 1800]))
     promotions = list(config["research"].get("promotions", [8, 3]))

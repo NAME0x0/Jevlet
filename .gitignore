@@ -10,4 +10,4 @@ data/
 *.sqlite3
 checkpoints/
 results/runs/
-research/experiment_log.jsonl
+research/experiment_log*.jsonl

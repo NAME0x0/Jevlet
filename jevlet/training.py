@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 import time
 from contextlib import nullcontext
@@ -11,13 +12,14 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 
 from .calibration import fit_temperature
-from .data import DecisionCollator, DecisionExample, JsonlDecisionDataset, permute_question
+from .data import DecisionExample, JsonlDecisionDataset, permute_question
+from .families import build_collator, build_model, packed_topology
 from .losses import decision_loss
 from .metrics import compute_metrics, finite_metrics
-from .model import JevletModel, ModelConfig
 
 
 def file_sha256(path: str | Path) -> str:
@@ -52,7 +54,7 @@ def move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
 
 @torch.no_grad()
 def collect_predictions(
-    model: JevletModel, loader: DataLoader, device: torch.device
+    model: nn.Module, loader: DataLoader, device: torch.device
 ) -> tuple[list[torch.Tensor], list[dict[str, Any]], dict[str, float]]:
     model.eval()
     all_logits: list[torch.Tensor] = []
@@ -82,9 +84,9 @@ def collect_predictions(
 
 @torch.no_grad()
 def option_order_robustness(
-    model: JevletModel,
+    model: nn.Module,
     examples: list[DecisionExample],
-    collator: DecisionCollator,
+    collator: Any,
     device: torch.device,
     limit: int = 32,
 ) -> dict[str, float | int]:
@@ -135,10 +137,10 @@ def option_order_robustness(
 
 @torch.no_grad()
 def benchmark_state_sharing(
-    model: JevletModel,
+    model: nn.Module,
     examples: list[DecisionExample],
     device: torch.device,
-    max_seq_len: int,
+    data_config: dict[str, Any] | None = None,
     repeats: int = 5,
 ) -> dict[str, float | None]:
     candidates = [example for example in examples if len(example.questions) > 1]
@@ -147,8 +149,9 @@ def benchmark_state_sharing(
     sample = candidates[0]
     timings = {}
     original_topology = model.config.attention_topology
-    for topology in ("block_causal", "separate"):
-        collator = DecisionCollator(max_seq_len=max_seq_len, attention_topology=topology)
+    packed = packed_topology(model)
+    for topology in (packed, "separate"):
+        collator = build_collator(model, data_config, topology)
         batch = move_batch(collator([sample]), device)
         model.config.attention_topology = topology
         model(batch)
@@ -161,16 +164,35 @@ def benchmark_state_sharing(
             torch.cuda.synchronize(device)
         timings[topology] = (time.perf_counter() - start) / repeats
     model.config.attention_topology = original_topology
-    packed, separate = timings["block_causal"], timings["separate"]
+    packed_seconds, separate_seconds = timings[packed], timings["separate"]
     return {
-        "shared_state_speedup": separate / max(packed, 1e-9),
-        "incremental_ms_per_question": packed * 1000 / len(sample.questions),
+        "shared_state_speedup": separate_seconds / max(packed_seconds, 1e-9),
+        "incremental_ms_per_question": packed_seconds * 1000 / len(sample.questions),
     }
+
+
+def learning_rate_factor(step: int, training: dict[str, Any]) -> float:
+    """Multiplier for the optimizer step after ``step`` completed steps.
+
+    A pure function of the step count, so resumed runs follow the identical schedule.
+    """
+    schedule = training.get("lr_schedule", "constant")
+    warmup = int(training.get("warmup_steps", 0))
+    if warmup > 0 and step < warmup:
+        return (step + 1) / warmup
+    if schedule == "constant":
+        return 1.0
+    if schedule != "cosine":
+        raise ValueError("training.lr_schedule must be constant or cosine")
+    horizon = max(1, int(training.get("max_steps", 100)) - warmup)
+    progress = min(1.0, (step - warmup) / horizon)
+    floor = float(training.get("min_lr_ratio", 0.1))
+    return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
 
 def save_checkpoint(
     path: str | Path,
-    model: JevletModel,
+    model: nn.Module,
     optimizer: torch.optim.Optimizer,
     training_config: dict[str, Any],
     temperature: float,
@@ -208,7 +230,7 @@ def _restore_rng_state(state: dict[str, Any]) -> None:
 
 def _save_progress(
     path: Path,
-    model: JevletModel,
+    model: nn.Module,
     optimizer: torch.optim.Optimizer,
     scaler: torch.amp.GradScaler,
     config: dict[str, Any],
@@ -236,11 +258,10 @@ def _save_progress(
     temporary.replace(path)
 
 
-def load_checkpoint(
-    path: str | Path, device: str | torch.device = "cpu"
-) -> tuple[JevletModel, dict]:
+def load_checkpoint(path: str | Path, device: str | torch.device = "cpu") -> tuple[nn.Module, dict]:
     payload = torch.load(path, map_location="cpu", weights_only=True)
-    model = JevletModel(ModelConfig.from_dict(payload["model_config"]))
+    # Pretrained backbones are rebuilt from config only; the checkpoint carries all weights.
+    model = build_model(payload["model_config"], load_weights=False)
     model.load_state_dict(payload["model_state"])
     model.to(device)
     model.eval()
@@ -253,8 +274,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     seed = int(config.get("seed", 1337))
     seed_everything(seed)
     device = resolve_device(config.get("device", "auto"))
-    model_config = ModelConfig.from_dict(config["model"])
-    model = JevletModel(model_config).to(device)
+    model = build_model(config["model"]).to(device)
     if device.type == "cuda" and config.get("gpu_memory_fraction"):
         device_index = device.index if device.index is not None else torch.cuda.current_device()
         torch.cuda.set_per_process_memory_fraction(
@@ -262,13 +282,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         )
         torch.cuda.reset_peak_memory_stats(device)
 
-    collator = DecisionCollator(
-        max_seq_len=model_config.max_seq_len,
-        attention_topology=model_config.attention_topology,
-        max_state_bytes=int(config["data"].get("max_state_bytes", 128)),
-        max_question_bytes=int(config["data"].get("max_question_bytes", 64)),
-        max_option_bytes=int(config["data"].get("max_option_bytes", 48)),
-    )
+    collator = build_collator(model, config["data"])
     train_dataset = JsonlDecisionDataset(config["data"]["train"])
     dev_dataset = JsonlDecisionDataset(config["data"]["dev"])
     eval_examples = dev_dataset.examples
@@ -299,11 +313,19 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         num_workers=0,
         collate_fn=collator,
     )
+    learning_rate = float(config["training"].get("learning_rate", 3e-4))
+    if hasattr(model, "parameter_groups"):
+        backbone_rate = float(config["training"].get("backbone_learning_rate", learning_rate))
+        parameters: Any = model.parameter_groups(learning_rate, backbone_rate)
+    else:
+        parameters = model.parameters()
     optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=float(config["training"].get("learning_rate", 3e-4)),
+        parameters,
+        lr=learning_rate,
         weight_decay=float(config["training"].get("weight_decay", 0.01)),
     )
+    for group in optimizer.param_groups:
+        group.setdefault("base_lr", group["lr"])
     amp_dtype = config["training"].get("amp_dtype")
     if amp_dtype is None:
         amp_dtype = "fp16" if config["training"].get("fp16", True) else "none"
@@ -389,6 +411,9 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         questions_seen += len(output.records)
         tokens_seen += int(batch["valid_mask"].sum())
         if micro_step % gradient_accumulation == 0:
+            factor = learning_rate_factor(step, config["training"])
+            for group in optimizer.param_groups:
+                group["lr"] = group["base_lr"] * factor
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             scaler.step(optimizer)
@@ -439,7 +464,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         model,
         eval_examples,
         device,
-        model_config.max_seq_len,
+        config["data"],
         int(config["evaluation"].get("benchmark_repeats", 5)),
     )
     metrics: dict[str, Any] = {

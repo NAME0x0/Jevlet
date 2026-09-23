@@ -66,6 +66,21 @@ def compute_metrics(
     }
 
 
+def metrics_by_family(
+    logits_list: list[torch.Tensor], records: list[dict[str, Any]], temperature: float = 1.0
+) -> dict[str, dict[str, float | int | None]]:
+    """Per-family metrics, so an aggregate cannot hide a collapsed source."""
+    groups: dict[str, tuple[list[torch.Tensor], list[dict[str, Any]]]] = {}
+    for logits, record in zip(logits_list, records, strict=True):
+        bucket = groups.setdefault(str(record.get("family", "unknown")), ([], []))
+        bucket[0].append(logits)
+        bucket[1].append(record)
+    return {
+        family: compute_metrics(family_logits, family_records, temperature)
+        for family, (family_logits, family_records) in sorted(groups.items())
+    }
+
+
 def finite_metrics(metrics: dict[str, Any]) -> bool:
     for value in metrics.values():
         if isinstance(value, float) and not math.isfinite(value):

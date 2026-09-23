@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 import torch
 
-from .data import DecisionCollator, DecisionExample, Question
+from .data import DecisionExample, Question
+from .families import build_collator
 from .training import load_checkpoint, move_batch
 
 
@@ -46,13 +47,7 @@ class JevletRouter:
         self.model, payload = load_checkpoint(checkpoint, self.device)
         self.temperature = float(payload.get("temperature", 1.0))
         data_config = payload.get("training_config", {}).get("data", {})
-        self.collator = DecisionCollator(
-            max_seq_len=self.model.config.max_seq_len,
-            attention_topology=self.model.config.attention_topology,
-            max_state_bytes=int(data_config.get("max_state_bytes", 128)),
-            max_question_bytes=int(data_config.get("max_question_bytes", 64)),
-            max_option_bytes=int(data_config.get("max_option_bytes", 48)),
-        )
+        self.collator = build_collator(self.model, data_config)
 
     @torch.no_grad()
     def _probabilities(

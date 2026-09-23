@@ -1,0 +1,56 @@
+{
+  "seed": 1337,
+  "device": "auto",
+  "gpu_memory_fraction": 0.85,
+  "model": {
+    "family": "pretrained",
+    "backbone": "sentence-transformers/all-MiniLM-L6-v2",
+    "attention_topology": "block_bidir",
+    "option_pool": "mean",
+    "decision_head": "pointer",
+    "max_packed_len": 1024,
+    "max_state_tokens": 224,
+    "max_question_tokens": 64,
+    "max_option_tokens": 40,
+    "gradient_checkpointing": false
+  },
+  "data": {
+    "train": "data/mixture/train.jsonl",
+    "dev": "data/mixture/dev.jsonl"
+  },
+  "training": {
+    "batch_size": 8,
+    "gradient_accumulation": 2,
+    "max_steps": 400,
+    "save_every_steps": 200,
+    "learning_rate": 0.001,
+    "backbone_learning_rate": 0.00005,
+    "lr_schedule": "constant",
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "loss": "ce",
+    "brier_weight": 0.25,
+    "label_smoothing": 0.05,
+    "amp_dtype": "fp16",
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "batch_size": 16,
+    "permutation_examples": 32,
+    "benchmark_repeats": 3
+  },
+  "research": {
+    "candidate_set": "jevlet_p",
+    "hours": 3.0,
+    "final_reserve_hours": 1.0,
+    "stage_steps": [400, 1200, 2500],
+    "stage_max_seconds": [600, 1500, 2400],
+    "stage_eval_examples": [1200, 2500, null],
+    "stage_permutation_examples": [32, 64, 128],
+    "promotions": [5, 2],
+    "final_steps": 4000,
+    "final_seeds": [1337, 7331],
+    "final_model": {},
+    "log": "research/experiment_log_pretrained.jsonl"
+  }
+}
