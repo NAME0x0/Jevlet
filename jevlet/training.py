@@ -191,6 +191,51 @@ def save_checkpoint(
     )
 
 
+def _rng_state() -> dict[str, Any]:
+    return {
+        "python": random.getstate(),
+        "torch": torch.get_rng_state(),
+        "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
+    }
+
+
+def _restore_rng_state(state: dict[str, Any]) -> None:
+    random.setstate(state["python"])
+    torch.set_rng_state(state["torch"])
+    if torch.cuda.is_available() and state["cuda"]:
+        torch.cuda.set_rng_state_all(state["cuda"])
+
+
+def _save_progress(
+    path: Path,
+    model: JevletModel,
+    optimizer: torch.optim.Optimizer,
+    scaler: torch.amp.GradScaler,
+    config: dict[str, Any],
+    step: int,
+    micro_step: int,
+    epoch: int,
+    batch_offset: int,
+) -> None:
+    """Write a recoverable snapshot at an optimizer boundary."""
+    payload = {
+        "model_config": model.config.to_dict(),
+        "model_state": model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "scaler_state": scaler.state_dict(),
+        "training_config": config,
+        "step": step,
+        "micro_step": micro_step,
+        "epoch": epoch,
+        "batch_offset": batch_offset,
+        "rng_state": _rng_state(),
+        "train_data_sha256": file_sha256(config["data"]["train"]),
+    }
+    temporary = path.with_name(path.name + ".tmp")
+    torch.save(payload, temporary)
+    temporary.replace(path)
+
+
 def load_checkpoint(
     path: str | Path, device: str | torch.device = "cpu"
 ) -> tuple[JevletModel, dict]:
@@ -226,15 +271,29 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     )
     train_dataset = JsonlDecisionDataset(config["data"]["train"])
     dev_dataset = JsonlDecisionDataset(config["data"]["dev"])
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=int(config["training"].get("batch_size", 2)),
-        shuffle=True,
-        num_workers=0,
-        collate_fn=collator,
-    )
+    eval_examples = dev_dataset.examples
+    eval_limit = config["evaluation"].get("max_examples")
+    if eval_limit is not None and int(eval_limit) < len(eval_examples):
+        if int(eval_limit) < 1:
+            raise ValueError("evaluation.max_examples must be positive")
+        indices = sorted(random.Random(1729).sample(range(len(eval_examples)), int(eval_limit)))
+        eval_examples = [eval_examples[index] for index in indices]
+    if not train_dataset.examples:
+        raise ValueError("training dataset is empty")
+
+    def train_loader_for_epoch(epoch: int) -> DataLoader:
+        generator = torch.Generator().manual_seed(seed + epoch)
+        return DataLoader(
+            train_dataset,
+            batch_size=int(config["training"].get("batch_size", 2)),
+            shuffle=True,
+            generator=generator,
+            num_workers=0,
+            collate_fn=collator,
+        )
+
     dev_loader = DataLoader(
-        dev_dataset,
+        eval_examples,
         batch_size=int(config["evaluation"].get("batch_size", 4)),
         shuffle=False,
         num_workers=0,
@@ -245,31 +304,76 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         lr=float(config["training"].get("learning_rate", 3e-4)),
         weight_decay=float(config["training"].get("weight_decay", 0.01)),
     )
-    use_amp = device.type == "cuda" and bool(config["training"].get("fp16", True))
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    amp_dtype = config["training"].get("amp_dtype")
+    if amp_dtype is None:
+        amp_dtype = "fp16" if config["training"].get("fp16", True) else "none"
+    if amp_dtype not in {"none", "fp16", "bf16"}:
+        raise ValueError("training.amp_dtype must be none, fp16, or bf16")
+    if device.type == "cuda" and amp_dtype == "bf16" and not torch.cuda.is_bf16_supported():
+        raise ValueError("BF16 is not supported by this CUDA device")
+    use_amp = device.type == "cuda" and amp_dtype != "none"
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype == "fp16")
     gradient_accumulation = int(config["training"].get("gradient_accumulation", 1))
     max_steps = int(config["training"].get("max_steps", 100))
     max_seconds = config["training"].get("max_seconds")
     training_deadline = time.monotonic() + float(max_seconds) if max_seconds is not None else None
     max_grad_norm = float(config["training"].get("max_grad_norm", 1.0))
+    save_every_steps = int(config["training"].get("save_every_steps", 0))
+    if save_every_steps < 0:
+        raise ValueError("save_every_steps must be nonnegative")
     optimizer.zero_grad(set_to_none=True)
-    iterator = iter(train_loader)
     step = 0
     micro_step = 0
+    epoch = 0
+    batch_offset = 0
+    resume_from = config["training"].get("resume_from")
+    if resume_from:
+        payload = torch.load(resume_from, map_location="cpu", weights_only=True)
+        if payload["model_config"] != model.config.to_dict():
+            raise ValueError("resume checkpoint model configuration differs")
+        if payload["train_data_sha256"] != file_sha256(config["data"]["train"]):
+            raise ValueError("resume checkpoint training data differs")
+        model.load_state_dict(payload["model_state"])
+        optimizer.load_state_dict(payload["optimizer_state"])
+        scaler.load_state_dict(payload["scaler_state"])
+        step = int(payload["step"])
+        micro_step = int(payload["micro_step"])
+        epoch = int(payload["epoch"])
+        batch_offset = int(payload["batch_offset"])
+        if micro_step % gradient_accumulation:
+            raise ValueError("resume checkpoint is not at an optimizer boundary")
+        _restore_rng_state(payload["rng_state"])
+
+    train_loader = train_loader_for_epoch(epoch)
+    if batch_offset > len(train_loader):
+        raise ValueError("resume checkpoint batch offset exceeds epoch")
+    iterator = iter(train_loader)
+    for _ in range(batch_offset):
+        next(iterator)
     questions_seen = 0
     tokens_seen = 0
     started = time.perf_counter()
     model.train()
     while step < max_steps:
-        if training_deadline is not None and time.monotonic() >= training_deadline and step > 0:
+        if (
+            training_deadline is not None
+            and time.monotonic() >= training_deadline
+            and step > 0
+            and micro_step % gradient_accumulation == 0
+        ):
             break
         try:
             batch = next(iterator)
         except StopIteration:
+            epoch += 1
+            batch_offset = 0
+            train_loader = train_loader_for_epoch(epoch)
             iterator = iter(train_loader)
             batch = next(iterator)
+        batch_offset += 1
         batch = move_batch(batch, device)
-        autocast = torch.amp.autocast("cuda", dtype=torch.float16) if use_amp else nullcontext()
+        torch_amp_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
+        autocast = torch.amp.autocast("cuda", dtype=torch_amp_dtype) if use_amp else nullcontext()
         with autocast:
             output = model(batch)
             loss, _ = decision_loss(
@@ -291,6 +395,29 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
             step += 1
+            if save_every_steps and step % save_every_steps == 0:
+                _save_progress(
+                    run_path / "last.pt",
+                    model,
+                    optimizer,
+                    scaler,
+                    config,
+                    step,
+                    micro_step,
+                    epoch,
+                    batch_offset,
+                )
+    _save_progress(
+        run_path / "last.pt",
+        model,
+        optimizer,
+        scaler,
+        config,
+        step,
+        micro_step,
+        epoch,
+        batch_offset,
+    )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     train_seconds = max(time.perf_counter() - started, 1e-9)
@@ -303,14 +430,14 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         raise RuntimeError("non-finite evaluation metric")
     robustness = option_order_robustness(
         model,
-        dev_dataset.examples,
+        eval_examples,
         collator,
         device,
         int(config["evaluation"].get("permutation_examples", 32)),
     )
     sharing = benchmark_state_sharing(
         model,
-        dev_dataset.examples,
+        eval_examples,
         device,
         model_config.max_seq_len,
         int(config["evaluation"].get("benchmark_repeats", 5)),
@@ -334,8 +461,10 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         "steps": step,
         "seed": seed,
         "device": str(device),
+        "amp_dtype": amp_dtype if use_amp else "none",
         "train_data_sha256": file_sha256(config["data"]["train"]),
         "dev_data_sha256": file_sha256(config["data"]["dev"]),
+        "evaluation_examples": len(eval_examples),
     }
     checkpoint_path = run_path / "best.pt"
     save_checkpoint(checkpoint_path, model, optimizer, config, temperature, metrics)

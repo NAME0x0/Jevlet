@@ -3,11 +3,11 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp_*/
 .ruff_cache/
 .venv/
-data/*.jsonl
-data/manifest.json
-data/vault/
+data/
+*.sqlite3
 checkpoints/
 results/runs/
 research/experiment_log.jsonl

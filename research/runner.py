@@ -60,6 +60,25 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+def _record_result(root: Path, log_path: Path, result: dict[str, Any]) -> None:
+    result_path = root / result["run_id"] / "result.json"
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _append_jsonl(log_path, result)
+
+
+def _cached_result(root: Path, run_id: str) -> dict[str, Any] | None:
+    result_path = root / run_id / "result.json"
+    if not result_path.exists():
+        return None
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    if result.get("run_id") != run_id:
+        raise RuntimeError(f"invalid cached result for {run_id}")
+    if result.get("status") == "completed" and not (root / run_id / "last.pt").exists():
+        raise RuntimeError(f"completed run {run_id} has no resumable checkpoint")
+    return result
+
+
 def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> dict[str, Any]:
     verify_research_data(config)
     root = Path(output_root)
@@ -70,11 +89,22 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
     stage_steps = list(config["research"].get("stage_steps", [120, 600, 1800]))
     promotions = list(config["research"].get("promotions", [8, 3]))
     hours = float(config["research"].get("hours", 8.0))
-    deadline = time.monotonic() + hours * 3600
+    config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+    state_path = root / "run_state.json"
+    if state_path.exists():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        if state["hours"] != hours or state["config_sha256"] != config_hash:
+            raise ValueError("cannot resume research run with a different configuration")
+    else:
+        state = {"started_at": time.time(), "hours": hours, "config_sha256": config_hash}
+        state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    deadline = state["started_at"] + hours * 3600
     reserve_hours = float(config["research"].get("final_reserve_hours", 0.0))
     search_deadline = deadline - reserve_hours * 3600
     max_experiments = int(config["research"].get("max_experiments", 1_000_000))
     stage_max_seconds = list(config["research"].get("stage_max_seconds", []))
+    stage_eval_examples = list(config["research"].get("stage_eval_examples", []))
+    stage_permutation_examples = list(config["research"].get("stage_permutation_examples", []))
     all_results: list[dict[str, Any]] = []
     latest_stage_results: list[dict[str, Any]] = []
     active = candidates
@@ -82,14 +112,33 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
     for stage_index, budget in enumerate(stage_steps, start=1):
         stage_results = []
         for candidate in active:
-            if time.monotonic() >= search_deadline or len(all_results) >= max_experiments:
+            run_id = f"stage-{stage_index}-{candidate.candidate_id}"
+            cached = _cached_result(root, run_id)
+            if cached is not None:
+                all_results.append(cached)
+                if cached["status"] == "completed":
+                    stage_results.append(cached)
+                continue
+            if time.time() >= search_deadline or len(all_results) >= max_experiments:
                 break
             run_config = apply_candidate(config, candidate)
             run_config["training"]["max_steps"] = int(budget)
             if stage_index <= len(stage_max_seconds):
                 run_config["training"]["max_seconds"] = stage_max_seconds[stage_index - 1]
-            run_config["seed"] = int(config.get("seed", 1337)) + stage_index
-            run_id = f"stage-{stage_index}-{candidate.candidate_id}"
+            if stage_index <= len(stage_eval_examples):
+                run_config["evaluation"]["max_examples"] = stage_eval_examples[stage_index - 1]
+            if stage_index <= len(stage_permutation_examples):
+                run_config["evaluation"]["permutation_examples"] = stage_permutation_examples[
+                    stage_index - 1
+                ]
+            run_config["seed"] = int(config.get("seed", 1337))
+            if stage_index > 1:
+                previous = root / f"stage-{stage_index - 1}-{candidate.candidate_id}" / "last.pt"
+                if previous.exists():
+                    run_config["training"]["resume_from"] = str(previous)
+            interrupted = root / run_id / "last.pt"
+            if interrupted.exists():
+                run_config["training"]["resume_from"] = str(interrupted)
             message = (
                 f"[{run_id}] Hypothesis: {candidate.hypothesis} "
                 f"Expected mechanism: {candidate.expected_mechanism}"
@@ -119,7 +168,7 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
                     "started_at": started,
                     "completed_at": time.time(),
                 }
-            _append_jsonl(log_path, result)
+            _record_result(root, log_path, result)
             all_results.append(result)
             if result["status"] == "completed":
                 stage_results.append(result)
@@ -136,21 +185,31 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
 
     completed = [result for result in all_results if result["status"] == "completed"]
     final_results = []
-    if completed and latest_stage_results and time.monotonic() < deadline:
+    if completed and latest_stage_results and time.time() < deadline:
         search_winner = promotion_order(latest_stage_results)[0]
         winner_candidate = by_id[search_winner["candidate"]["candidate_id"]]
         for final_seed in config["research"].get("final_seeds", [config.get("seed", 1337)]):
-            if time.monotonic() >= deadline:
+            run_id = f"final-{winner_candidate.candidate_id}-seed-{final_seed}"
+            cached = _cached_result(root, run_id)
+            if cached is not None:
+                all_results.append(cached)
+                if cached["status"] == "completed":
+                    final_results.append(cached)
+                    completed.append(cached)
+                continue
+            if time.time() >= deadline:
                 break
             final_config = apply_candidate(config, winner_candidate)
             final_config["model"].update(config["research"].get("final_model", {}))
             final_config["training"]["max_steps"] = int(
                 config["research"].get("final_steps", stage_steps[-1])
             )
-            remaining_seconds = max(1.0, deadline - time.monotonic())
+            remaining_seconds = max(1.0, deadline - time.time())
             final_config["training"]["max_seconds"] = remaining_seconds
             final_config["seed"] = int(final_seed)
-            run_id = f"final-{winner_candidate.candidate_id}-seed-{final_seed}"
+            interrupted = root / run_id / "last.pt"
+            if interrupted.exists():
+                final_config["training"]["resume_from"] = str(interrupted)
             print(
                 f"[{run_id}] Final verification. Hypothesis: {winner_candidate.hypothesis} "
                 f"Expected mechanism: {winner_candidate.expected_mechanism}",
@@ -179,7 +238,7 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
                     "started_at": started,
                     "completed_at": time.time(),
                 }
-            _append_jsonl(log_path, result)
+            _record_result(root, log_path, result)
             all_results.append(result)
             if result["status"] == "completed":
                 final_results.append(result)
