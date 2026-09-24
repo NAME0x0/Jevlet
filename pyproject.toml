@@ -32,8 +32,11 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-# One benchmark case per line keeps the hand-labeled table reviewable.
+# One case or skill per line keeps hand-written tables reviewable.
 "jevlet/benchmarks.py" = ["E501"]
+"jevlet/assistant/skills.py" = ["E501"]
+"jevlet/assistant/commands_synthetic.py" = ["E501"]
+"jevlet/assistant/benchmark.py" = ["E501"]
 
 [tool.ruff.format]
-exclude = ["jevlet/benchmarks.py"]
+exclude = ["jevlet/benchmarks.py", "jevlet/assistant/skills.py", "jevlet/assistant/commands_synthetic.py", "jevlet/assistant/benchmark.py"]

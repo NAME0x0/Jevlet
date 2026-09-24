@@ -15,7 +15,7 @@ def launcher_text(project: Path, pythonw: Path) -> str:
     for path in (project, pythonw):
         if '"' in str(path) or "\n" in str(path):
             raise ValueError("unsafe character in launcher path")
-    return f'{MARKER}\n@echo off\ncd /d "{project}"\nstart "" "{pythonw}" -m scripts.desktop\n'
+    return f'{MARKER}\n@echo off\ncd /d "{project}"\nstart "" "{pythonw}" -m jevlet.app\n'
 
 
 def install(startup_dir: Path, project: Path, pythonw: Path) -> Path:

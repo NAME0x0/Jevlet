@@ -11,3 +11,4 @@ data/
 checkpoints/
 results/runs/
 research/experiment_log*.jsonl
+temp/
