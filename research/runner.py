@@ -95,16 +95,22 @@ def run_successive_halving(config: dict[str, Any], output_root: str | Path) -> d
     stage_steps = list(config["research"].get("stage_steps", [120, 600, 1800]))
     promotions = list(config["research"].get("promotions", [8, 3]))
     hours = float(config["research"].get("hours", 8.0))
-    config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+    # Extending the budget of an interrupted run is not a configuration change.
+    hashed = copy.deepcopy(config)
+    extend_hours = hashed["research"].pop("extend_hours", None)
+    config_hash = hashlib.sha256(json.dumps(hashed, sort_keys=True).encode()).hexdigest()
     state_path = root / "run_state.json"
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state["hours"] != hours or state["config_sha256"] != config_hash:
             raise ValueError("cannot resume research run with a different configuration")
+        if extend_hours is not None:
+            state["deadline"] = time.time() + float(extend_hours) * 3600
+            state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     else:
         state = {"started_at": time.time(), "hours": hours, "config_sha256": config_hash}
         state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-    deadline = state["started_at"] + hours * 3600
+    deadline = state.get("deadline", state["started_at"] + hours * 3600)
     reserve_hours = float(config["research"].get("final_reserve_hours", 0.0))
     search_deadline = deadline - reserve_hours * 3600
     max_experiments = int(config["research"].get("max_experiments", 1_000_000))
