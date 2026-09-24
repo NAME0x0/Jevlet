@@ -331,11 +331,104 @@ APPS = (
         },
     ),
 )  # fmt: skip
+
+EXTRA_APPS = (
+    App("chrome", ("New Tab - Google Chrome", "{topic} - Google Chrome"),
+        (("Button", "Back"), ("Button", "Forward"), ("Button", "Reload"), ("Button", "New Tab"),
+         ("Button", "Close"), ("Edit", "Address and search bar"), ("Button", "Bookmark this tab"),
+         ("Button", "Downloads"), ("Button", "Chrome"), ("Button", "Extensions"), ("Button", "Side panel")),
+        {"Reload": ("reload the page", "refresh this"), "New Tab": ("open another tab",),
+         "Bookmark this tab": ("bookmark this", "save this page for later"),
+         "Address and search bar": ("go to reddit.com", "search for {topic}"),
+         "Downloads": ("see what I downloaded",), "Side panel": ("open the reading list",),
+         "Back": ("previous page",), "Extensions": ("show my extensions",)}),
+    App("slack", ("general (Channel) - Northwind - Slack", "{name} (DM) - Slack"),
+        (("Button", "Home"), ("Button", "DMs"), ("Button", "Activity"), ("Edit", "Message #general"),
+         ("Button", "Send now"), ("Button", "Attach"), ("Button", "Start a huddle"), ("Button", "Search"),
+         ("Button", "Add reaction"), ("Button", "Reply in thread"), ("Button", "More actions"),
+         ("TreeItem", "general"), ("TreeItem", "random")),
+        {"Message #general": ("post in general", "write a message to the channel"),
+         "Send now": ("send the message",), "Attach": ("attach the {word} file",),
+         "Start a huddle": ("start a quick call", "huddle with the team"), "Reply in thread": ("reply in the thread",),
+         "Add reaction": ("react to this message",), "random": ("go to the random channel",),
+         "DMs": ("show my direct messages",), "Activity": ("show mentions",)},
+        frozenset({"Send now"})),
+    App("discord", ("#general | Study Group - Discord", "Friends - Discord"),
+        (("Button", "Direct Messages"), ("Button", "Add a Server"), ("Edit", "Message #general"),
+         ("Button", "Mute"), ("Button", "Deafen"), ("Button", "User Settings"), ("Button", "Start Video Call"),
+         ("Button", "Upload a File"), ("Button", "Pinned Messages"), ("Button", "Inbox"), ("TreeItem", "general")),
+        {"Mute": ("mute my mic on discord", "turn off my microphone"), "Deafen": ("deafen myself", "stop hearing everyone"),
+         "User Settings": ("open discord settings",), "Start Video Call": ("start a video call",),
+         "Upload a File": ("send a file in this chat",), "Pinned Messages": ("show the pinned messages",),
+         "Message #general": ("type in general",), "Direct Messages": ("show my dms",)},
+        frozenset({"Upload a File"})),
+    App("terminal", ("PowerShell", "Command Prompt", "Ubuntu"),
+        (("Button", "New Tab"), ("SplitButton", "Open a new tab"), ("Button", "Close Tab"), ("Button", "Minimize"),
+         ("Button", "Maximize"), ("Button", "Close"), ("TabItem", "PowerShell"), ("TabItem", "Command Prompt"),
+         ("MenuItem", "Settings"), ("MenuItem", "Command palette")),
+        {"Close Tab": ("close this tab", "shut the current tab"), "Open a new tab": ("open a new terminal tab",),
+         "Settings": ("open terminal settings",), "Command palette": ("open the command palette",),
+         "Command Prompt": ("switch to the cmd tab",)}),
+    App("powerpoint", ("{word}.pptx - PowerPoint",),
+        (("Button", "New Slide"), ("Button", "From Beginning"), ("Button", "Layout"), ("Button", "Save"),
+         ("Button", "Share"), ("TabItem", "Design"), ("TabItem", "Transitions"), ("TabItem", "Insert"),
+         ("Button", "Reset"), ("Button", "Designer"), ("Button", "Notes"), ("Button", "Comments")),
+        {"New Slide": ("add a slide", "insert a new slide"), "From Beginning": ("start the presentation", "present from the start"),
+         "Design": ("change the theme",), "Transitions": ("add slide transitions",), "Designer": ("suggest a nicer layout",),
+         "Notes": ("show speaker notes",), "Share": ("share the deck with {name}",)},
+        frozenset({"Share"})),
+    App("photos", ("IMG_{n}.jpg - Photos", "Photos"),
+        (("Button", "Edit image"), ("Button", "Rotate"), ("Button", "Delete"), ("Button", "Favorite"),
+         ("Button", "Share"), ("Button", "Print"), ("Button", "Zoom in"), ("Button", "Zoom out"),
+         ("Button", "Next"), ("Button", "Previous"), ("Button", "Slideshow"), ("Button", "See more")),
+        {"Rotate": ("rotate this photo", "turn the picture sideways"), "Edit image": ("crop this picture", "edit the photo"),
+         "Delete": ("delete this photo",), "Favorite": ("add this to favorites", "heart this picture"),
+         "Slideshow": ("play a slideshow",), "Next": ("next picture",), "Previous": ("previous photo",),
+         "Share": ("share this picture with {name}",), "Print": ("print this photo",)},
+        frozenset({"Delete", "Share"})),
+    App("taskmgr", ("Task Manager",),
+        (("Button", "Run new task"), ("Button", "End task"), ("Button", "Efficiency mode"),
+         ("TabItem", "Processes"), ("TabItem", "Performance"), ("TabItem", "Startup apps"),
+         ("TabItem", "App history"), ("TabItem", "Users"), ("TabItem", "Details"), ("TabItem", "Services")),
+        {"End task": ("end this process", "kill the selected app"), "Performance": ("show cpu and memory graphs",),
+         "Startup apps": ("see what starts with windows",), "Run new task": ("run a new task",),
+         "Efficiency mode": ("put this app in efficiency mode",), "Services": ("show the services",)},
+        frozenset({"End task"})),
+    App("whatsapp", ("WhatsApp",),
+        (("Edit", "Type a message"), ("Button", "Send"), ("Button", "Attach"), ("Button", "Voice call"),
+         ("Button", "Video call"), ("Button", "New chat"), ("Edit", "Search or start a new chat"),
+         ("Button", "Emoji"), ("Button", "Voice message")),
+        {"Type a message": ("write a reply",), "Send": ("send this message",), "Voice call": ("call them",),
+         "Video call": ("video call them",), "New chat": ("start a new chat",), "Attach": ("send a photo",),
+         "Search or start a new chat": ("find my chat with {name}",), "Voice message": ("record a voice note",)},
+        frozenset({"Send", "Voice call", "Video call"})),
+    App("mediaplayer", ("Media Player", "clip_{n}.mp4 - Media Player"),
+        (("Button", "Play"), ("Button", "Pause"), ("Button", "Next"), ("Button", "Previous"),
+         ("Button", "Mute"), ("Slider", "Volume"), ("Button", "Full screen"), ("Button", "Shuffle"),
+         ("Button", "Repeat"), ("Button", "Subtitles")),
+        {"Pause": ("pause the video",), "Full screen": ("make the video full screen", "go fullscreen"),
+         "Subtitles": ("turn on captions", "show subtitles"), "Mute": ("mute the video",),
+         "Next": ("play the next video",), "Repeat": ("loop this",)}),
+    App("obs", ("OBS 30.2 - Profile: Streaming",),
+        (("Button", "Start Streaming"), ("Button", "Start Recording"), ("Button", "Start Virtual Camera"),
+         ("Button", "Studio Mode"), ("Button", "Settings"), ("Button", "Exit"), ("ListItem", "Display Capture"),
+         ("ListItem", "Webcam"), ("Button", "Add Source")),
+        {"Start Recording": ("start recording", "record my screen"), "Start Streaming": ("go live", "start the stream"),
+         "Start Virtual Camera": ("turn on the virtual camera",), "Add Source": ("add a new source",),
+         "Studio Mode": ("enable studio mode",), "Settings": ("open obs settings",)},
+        frozenset({"Start Streaming"})),
+)  # fmt: skip
+APPS = APPS + EXTRA_APPS
 HELD_OUT = frozenset({"teams", "spotify"})
 
 
 def _fill(rng: random.Random, text: str) -> str:
-    return text.format(name=rng.choice(NAMES), topic=rng.choice(TOPICS), word=rng.choice(WORDS))
+    return text.format(
+        name=rng.choice(NAMES),
+        topic=rng.choice(TOPICS),
+        word=rng.choice(WORDS),
+        n=rng.randint(100, 9999),
+    )
 
 
 def _example(rng: random.Random, apps: tuple[App, ...], split: str, index: int) -> DecisionExample:
@@ -383,11 +476,14 @@ def _example(rng: random.Random, apps: tuple[App, ...], split: str, index: int) 
 
 
 def generate_grounding_dataset(
-    output_dir: str | Path, counts: tuple[int, int] = (30_000, 3_000), seed: int = 4242
+    output_dir: str | Path,
+    counts: tuple[int, int] = (30_000, 3_000),
+    seed: int = 4242,
+    extra_apps: tuple[App, ...] = (),
 ) -> dict:
-    """Train on seen apps; dev on held-out apps (Teams, Spotify) to measure transfer."""
+    """Train on seen apps (plus captured ``extra_apps``); dev on held-out Teams and Spotify."""
     root = Path(output_dir)
-    seen = tuple(app for app in APPS if app.name not in HELD_OUT)
+    seen = tuple(app for app in APPS if app.name not in HELD_OUT) + extra_apps
     unseen = tuple(app for app in APPS if app.name in HELD_OUT)
     manifest: dict = {"seed": seed, "held_out_apps": sorted(HELD_OUT), "splits": {}}
     for offset, (split, count, apps) in enumerate(

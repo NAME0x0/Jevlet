@@ -55,11 +55,24 @@ def _example(row: LabeledDecision) -> DecisionExample:
     )
 
 
-def feedback_partitions(store: FeedbackStore) -> dict[str, list[DecisionExample]]:
+def _bucket(identifier: int) -> str:
+    return "train" if identifier % 5 in (0, 1, 2) else "tune" if identifier % 5 == 3 else "gate"
+
+
+def feedback_partitions(
+    store: FeedbackStore, demonstrations: Path | None = None
+) -> dict[str, list[DecisionExample]]:
+    """Ratings and demonstrations, split by stable id so a row never changes partition."""
     parts: dict[str, list[DecisionExample]] = {"train": [], "tune": [], "gate": []}
     for row in store.labeled_decisions():
-        bucket = "train" if row.id % 5 in (0, 1, 2) else "tune" if row.id % 5 == 3 else "gate"
-        parts[bucket].append(_example(row))
+        parts[_bucket(row.id)].append(_example(row))
+    if demonstrations is not None and demonstrations.exists():
+        from .desktop.demonstrations import DemonstrationStore, demonstration_example
+
+        for identifier, demo in DemonstrationStore(demonstrations).all():
+            example = demonstration_example(identifier, demo)
+            if example is not None:
+                parts[_bucket(identifier)].append(example)
     return parts
 
 
@@ -94,9 +107,10 @@ def personalize(
     backbone_learning_rate: float = 1e-5,
     device: str = "auto",
     seed: int = 1337,
+    demonstrations: Path | None = None,
 ) -> PersonalizationReport:
     current = Path(checkpoint)
-    parts = feedback_partitions(store)
+    parts = feedback_partitions(store, demonstrations)
     counts = {name: len(rows) for name, rows in parts.items()}
     if any(counts[name] < need for name, need in zip(parts, minimum, strict=True)):
         return PersonalizationReport(

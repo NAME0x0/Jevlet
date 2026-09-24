@@ -49,6 +49,25 @@ def setup(tmp_path):
     return current, store, tmp_path / "data/dev.jsonl"
 
 
+def test_demonstrations_join_the_partitions(setup, tmp_path) -> None:
+    from jevlet.desktop.demonstrations import Demonstration, DemonstrationStore
+
+    _, store, _ = setup
+    demos = DemonstrationStore(tmp_path / "demos.sqlite3")
+    control = {
+        "name": "Reply",
+        "automation_id": "",
+        "control_type": "Button",
+        "rect": [0, 0, 1, 1],
+        "enabled": True,
+    }
+    for _ in range(5):
+        demos.record(Demonstration("answer omar", "Inbox", "OUTLOOK", (control,), control))
+    parts = feedback_partitions(store, tmp_path / "demos.sqlite3")
+    demo_rows = [ex for rows in parts.values() for ex in rows if ex.family == "demonstration"]
+    assert len(demo_rows) == 5
+
+
 def test_partitions_are_stable_and_disjoint(setup) -> None:
     _, store, _ = setup
     parts = feedback_partitions(store)

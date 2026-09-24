@@ -38,6 +38,33 @@ def test_held_out_apps_never_reach_training(tmp_path) -> None:
     assert all(row["is_ood"] for row in rows)
 
 
+def test_captured_inventory_becomes_trainable_app(tmp_path) -> None:
+    from jevlet.grounding_live import inventory_apps
+
+    (tmp_path / "notes.json").write_text(
+        json.dumps(
+            {
+                "process": "NotesApp",
+                "titles": ["{weird} title"],
+                "controls": [
+                    ["Button", "Save"],
+                    ["Button", "Delete"],
+                    ["Button", "Settings"],
+                    ["Edit", "Body"],
+                    ["Button", "Copy {x}"],
+                ],
+            }
+        )
+    )
+    [app] = inventory_apps(tmp_path)
+    assert set(app.tasks) == {"Save", "Delete", "Settings"}
+    assert app.risky == {"Delete"}
+    rng = random.Random(0)
+    for index in range(50):
+        example = _example(rng, (app,), "train", index)
+        assert "{" not in example.state
+
+
 def test_live_controls_are_filtered_and_formatted_like_training_data() -> None:
     controls = [
         ControlInfo("", "", "Pane"),
