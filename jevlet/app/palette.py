@@ -6,6 +6,7 @@ Esc to close · Enter on an empty bar undoes the last action.
 
 from __future__ import annotations
 
+import logging
 import time
 
 from PySide6.QtCore import (
@@ -495,6 +496,7 @@ class Palette(QWidget):
 
     # ------------------------------------------------------------ visibility
     def summon(self, context: Context) -> None:
+        logging.debug("summon: visible=%s hwnd=%s", self.isVisible(), int(self.winId()))
         self.context = context
         if self.isVisible():
             self.dismiss()
@@ -535,6 +537,7 @@ class Palette(QWidget):
         slide.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def dismiss(self) -> None:
+        logging.debug("dismiss: visible=%s active=%s", self.isVisible(), self.isActiveWindow())
         self.armed = False
         self.progress.set_active(False)
         if not self.isVisible():
@@ -550,6 +553,10 @@ class Palette(QWidget):
             self.hide()
 
     def changeEvent(self, event) -> None:  # noqa: N802
+        if event.type() == QEvent.Type.ActivationChange:
+            logging.info(
+                "activation: active=%s visible=%s", self.isActiveWindow(), self.isVisible()
+            )
         if (
             event.type() == QEvent.Type.ActivationChange
             and not self.isActiveWindow()

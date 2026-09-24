@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
-import argparse
+import os
 import sys
 from pathlib import Path
+
+# pythonw has no console. Redirect before torch/transformers are imported: they create log
+# handlers at import time, and a handler bound to a missing stderr hides every later error.
+_LOG_FILE = Path(__file__).resolve().parents[2] / "data" / "jevlet.log"
+if sys.stderr is None or sys.stdout is None:
+    _LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    sys.stdout = sys.stderr = open(_LOG_FILE, "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+# The model files are cached locally; never block startup on the network.
+if (_LOG_FILE.parent / "model_cache").exists():
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+import argparse  # noqa: E402
+import logging  # noqa: E402
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QRectF, Qt, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QPainter, QPen, QPixmap
@@ -29,6 +43,8 @@ class HotkeyFilter(QAbstractNativeEventFilter):
     def nativeEventFilter(self, event_type, message):  # noqa: N802
         if event_type == b"windows_generic_MSG":
             hit, identifier = is_hotkey_message(message)
+            if hit:
+                logging.info("WM_HOTKEY id=%s", identifier)
             if hit and identifier == HOTKEY_ID:
                 self.callback()
                 return True, 0
@@ -49,10 +65,26 @@ def tray_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def _setup_logging() -> None:
+    """pythonw has no console: send warnings, tracebacks, and Qt callback errors to a file."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=DATA / "jevlet.log",
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    for noisy in ("httpx", "huggingface_hub", "transformers", "torch"):
+        logging.getLogger(noisy).setLevel(logging.ERROR)
+    sys.excepthook = lambda kind, value, trace: logging.error(
+        "uncaught error", exc_info=(kind, value, trace)
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", default=str(DATA / "daily" / "current.pt"))
     args = parser.parse_args()
+    _setup_logging()
     if not Path(args.checkpoint).exists():
         raise SystemExit(f"No model at {args.checkpoint}; train and export one first.")
 
@@ -151,10 +183,16 @@ def main() -> None:
     brain.taught.connect(on_taught)
 
     def on_hotkey() -> None:
-        if state["teaching"]:
-            brain.cancel_teaching()
-            return
-        palette.summon(Context.capture(exclude_handles=(int(palette.winId()), int(toast.winId()))))
+        logging.info("hotkey pressed")
+        try:
+            if state["teaching"]:
+                brain.cancel_teaching()
+                return
+            exclude = (int(palette.winId()), int(toast.winId()))
+            palette.summon(Context.capture(exclude_handles=exclude))
+        except Exception:
+            logging.exception("could not open the palette")
+            toast.show_message("error", "Couldn't open Jevlet", "See data/jevlet.log", 4000)
 
     palette.winId()  # create the native window that receives WM_HOTKEY
     hotkey = register_hotkey(
@@ -166,6 +204,7 @@ def main() -> None:
             (MOD_CONTROL | MOD_ALT, ord("J"), "Ctrl+Alt+J"),
         ],
     )
+    logging.info("hotkey registered: %s", hotkey or "none available")
     hotkey_filter = HotkeyFilter(on_hotkey)
     app.installNativeEventFilter(hotkey_filter)
 
