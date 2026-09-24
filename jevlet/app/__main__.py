@@ -1,5 +1,7 @@
 """Run the Jevlet assistant: ``pythonw -m jevlet.app`` (tray icon + Alt+Space palette)."""
 
+# ruff: noqa: E402 - stderr must be redirected before torch and Qt are imported (see below)
+
 from __future__ import annotations
 
 import os
@@ -17,8 +19,8 @@ if (_LOG_FILE.parent / "model_cache").exists():
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
-import argparse  # noqa: E402
-import logging  # noqa: E402
+import argparse
+import logging
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QRectF, Qt, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QPainter, QPen, QPixmap
