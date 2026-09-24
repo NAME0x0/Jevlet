@@ -17,8 +17,10 @@ from pathlib import Path
 from jevlet.benchmarks import RISK_QUESTION, daily_state
 from jevlet.data import DecisionExample, Question, write_jsonl
 
+from . import commands_v5
 from .skills import (
     MEDIA_ACTIONS,
+    NOT_APPLICABLE,
     SERVICES,
     SKILL_BY_KEY,
     SKILL_QUESTION,
@@ -181,18 +183,28 @@ def _environment(rng: random.Random, local_apps: tuple[str, ...]) -> tuple[Envir
     apps = sorted(rng.sample(pool, min(len(pool), rng.randint(40, 90))), key=str.casefold)
     windows, labels = [], {}
     for process, title, phrases in rng.sample(WINDOW_POOL, rng.randint(2, 9)):
-        filled = title.format(topic=rng.choice(TOPICS), file=rng.choice(FILES), doc=rng.choice(DOCS), book=rng.choice(DOCS))
+        doc = rng.choice(DOCS)
+        filled = title.format(topic=rng.choice(TOPICS), file=rng.choice(FILES), doc=doc, book=doc)
         label = window_label(process, filled)
         windows.append(label)
-        labels[label] = phrases
-    return Environment(apps, windows, windows[0]), labels
+        # Windows are also named by what they hold: "the thesis draft", "my budget".
+        content = doc.replace("_", " ") if "{doc}" in title or "{book}" in title else ""
+        labels[label] = phrases + ((f"the {content}", f"my {content}") if content else ())
+    stores = commands_v5.fill_stores(rng)
+    env = Environment(apps, windows, windows[0], stores["events"], stores["alarms"], stores["todos"], stores["files"])
+    return env, labels
 
 
 def _command(rng: random.Random, skill: str, env: Environment, windows: dict) -> tuple[str, dict[str, str], float]:
     """Return (command, gold arguments, P(risky))."""
+    v5 = commands_v5.command(rng, skill, env)
+    if v5 is not None:
+        return v5
     if skill == "open_app":
         app = rng.choice([a for a in env.apps if a in APP_ALIASES] or env.apps) if rng.random() < 0.6 else rng.choice(env.apps)
         name = rng.choice(APP_ALIASES.get(app, (app.lower(), app)))
+        if rng.random() < 0.3:
+            return commands_v5.extra_open_app(rng, name), {"app": app}, 0.02
         verb = rng.choice(("open", "launch", "start", "fire up", "run", "bring up", "open up"))
         return f"{verb} {name}", {"app": app}, 0.02
     if skill in {"switch_window", "close_window", "minimize_window", "maximize_window"}:
@@ -224,6 +236,9 @@ def _command(rng: random.Random, skill: str, env: Environment, windows: dict) ->
         }[action]
         return rng.choice(phrases), {"volume": action}, 0.01
     if skill == "settings":
+        if rng.random() < 0.35:
+            phrase, page = commands_v5.symptom_setting(rng)
+            return phrase, {"setting": page}, 0.03
         page = rng.choice(list(SETTINGS_PHRASES))
         phrase = rng.choice(SETTINGS_PHRASES[page])
         return rng.choice((phrase, f"open {phrase}", f"take me to {phrase}")), {"setting": page}, 0.03
@@ -286,9 +301,11 @@ def _example(rng: random.Random, index: int, split: str, local_apps: tuple[str, 
         Question(SKILL_QUESTION, [f"{s.name}: {s.description}" for s in skills], names.index(SKILL_BY_KEY[skill_key].name)),
         Question(RISK_QUESTION, ["True", "False"], 0 if risk >= 0.5 else 1, "noul", [risk, 1 - risk]),
     ]
-    for slot in SKILL_BY_KEY[skill_key].slots:
+    skill = SKILL_BY_KEY[skill_key]
+    for slot in skill.slots + skill.optional_slots:
         options = slot_options(slot, command, env)
-        answer = gold[slot]
+        # An optional argument the command does not give (an alarm without a label) is n/a.
+        answer = gold.get(slot, NOT_APPLICABLE) if slot in skill.optional_slots else gold[slot]
         if answer not in options:
             stats[f"inserted_{slot}"] += 1
             options.insert(rng.randrange(len(options)), answer)

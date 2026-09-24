@@ -1,0 +1,43 @@
+{
+  "seed": 1337,
+  "device": "auto",
+  "gpu_memory_fraction": 0.85,
+  "model": {
+    "family": "pretrained",
+    "backbone": "BAAI/bge-small-en-v1.5",
+    "attention_topology": "block_bidir",
+    "option_pool": "mean",
+    "decision_head": "pointer",
+    "max_packed_len": 1024,
+    "max_state_tokens": 224,
+    "max_question_tokens": 64,
+    "max_option_tokens": 40,
+    "gradient_checkpointing": false
+  },
+  "data": {
+    "train": "data/mixture_v5/train.jsonl",
+    "dev": "data/mixture_v5/dev.jsonl",
+    "vault": "data/mixture_v5/vault/vault.jsonl"
+  },
+  "training": {
+    "batch_size": 8,
+    "gradient_accumulation": 2,
+    "max_steps": 10000,
+    "save_every_steps": 500,
+    "learning_rate": 0.001,
+    "backbone_learning_rate": 5E-05,
+    "lr_schedule": "cosine",
+    "warmup_steps": 500,
+    "min_lr_ratio": 0.05,
+    "weight_decay": 0.01,
+    "loss": "ce_brier",
+    "amp_dtype": "fp16",
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "batch_size": 16,
+    "permutation_examples": 64,
+    "benchmark_repeats": 5,
+    "max_examples": 6000
+  }
+}

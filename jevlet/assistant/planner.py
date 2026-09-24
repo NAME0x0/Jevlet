@@ -37,7 +37,7 @@ from .skills import (
     slot_options,
     window_label,
 )
-from .text import parse_duration
+from .text import has_time, parse_duration
 
 SAFE_TO_RUN = 0.9  # Jev's bar for destructive operations: P(safe) must reach 0.9
 CONFIDENT = 0.75  # skill and argument confidence needed to run on a single Enter
@@ -50,6 +50,10 @@ class Context:
     current: Window | None
     windows: list[Window]
     apps: list[App]
+    events: list[str] = field(default_factory=list)
+    alarms: list[str] = field(default_factory=list)
+    todos: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
 
     @classmethod
     def capture(cls, exclude_handles: tuple[int, ...] = ()) -> Context:
@@ -63,6 +67,10 @@ class Context:
             current_window=window_label(self.current.process, self.current.title)
             if self.current
             else "",
+            events=list(self.events),
+            alarms=list(self.alarms),
+            todos=list(self.todos),
+            files=list(self.files),
         )
 
 
@@ -170,23 +178,28 @@ class Planner:
         plan = Plan(command, skill, confidence, max(risk, skill.risk_floor))
         env = context.environment()
         questions = {}
-        for slot in skill.slots:
+        for slot in skill.slots + skill.optional_slots:
             options = slot_options(slot, command, env)
             if len(options) > 1:
                 questions[slot] = ChoiceQuestion(SLOTS[slot].question, options)
-            else:
+            elif slot in skill.slots:
                 plan.missing = slot
         if questions:
             answers = self.engine.evaluate(self._state(command, context), questions)
             for slot, answer in answers.items():
+                if answer.selected == NOT_APPLICABLE:
+                    if slot in skill.slots:
+                        plan.missing = slot
+                        plan.args[slot] = answer.selected
+                    continue  # an optional argument the command did not give
                 plan.args[slot] = answer.selected
                 plan.arg_confidence[slot] = answer.confidence
-                if answer.selected == NOT_APPLICABLE:
-                    plan.missing = slot
-        if skill.key == "timer":
+        if skill.time == "duration":
             plan.duration = parse_duration(command)
             if not plan.duration:
                 plan.missing = "duration"
+        elif skill.time == "required" and not has_time(command):
+            plan.missing = "time"
         if skill.needs_screen:
             self._ground(plan, context)
         return plan

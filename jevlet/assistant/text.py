@@ -63,8 +63,18 @@ NUMBER_WORDS = {
 }  # fmt: skip
 TRIGGERS = (
     "search the web for", "search for", "look up", "google", "search", "find",
-    "type out", "type", "write", "say", "enter", "reply with", "named", "called",
-    "titled", "about", "for",
+    "type out", "type in", "type", "write", "say", "enter", "reply with", "named", "called",
+    "titled", "remind me to", "remind me about", "reminder to", "forget to", "task", "todo",
+    "remember that", "jot down that",
+    "jot down", "write down that", "note that", "note", "add", "put", "schedule", "book", "i have",
+    "play", "email about", "about", "how much is", "work out", "calculate", "for", "in",
+)  # fmt: skip
+# A span is also offered cut at the first of these, so "lunch with omar next tuesday at 1"
+# yields "lunch with omar". The C# port uses the same lists in the same order.
+STOPS = (
+    " and then ", " then ", " in ", " on ", " at ", " into ", " using ", " online", " for me",
+    " please", " here", " right now", " quickly", " to my ", " tomorrow", " today", " tonight",
+    " next ", " this ", " every ", " by ", ", add",
 )  # fmt: skip
 
 
@@ -116,7 +126,13 @@ def strip_courtesy(command: str) -> str:
     return COURTESY.sub("", command.strip()).strip()
 
 
-def span_candidates(command: str, limit: int = 8) -> list[str]:
+def _with_cuts(span: str) -> list[str]:
+    lowered = span.casefold()
+    cuts = [span[: lowered.find(stop)].strip() for stop in STOPS if lowered.find(stop) > 0]
+    return cuts + [span]
+
+
+def span_candidates(command: str, limit: int = 10) -> list[str]:
     """Plausible free-text arguments, all copied verbatim from the command."""
     text = strip_courtesy(command).rstrip(". ")
     candidates: list[str] = []
@@ -125,20 +141,12 @@ def span_candidates(command: str, limit: int = 8) -> list[str]:
     candidates += [text[match.end() :] for match in DELEGATE.finditer(text)][:2]
     lowered = text.casefold()
     for trigger in TRIGGERS:
-        for match in re.finditer(rf"\b{re.escape(trigger)}\b\s+", lowered):
-            span = text[match.end() :].strip()
-            for stop in (
-                " and then ", " then ", " in ", " on ", " into ", " using ", " online",
-                " for me", " please", " here", " right now", " quickly",
-            ):  # fmt: skip
-                cut = span.casefold().find(stop)
-                if cut > 0:
-                    candidates.append(span[:cut].strip())
-            candidates.append(span)
+        for match in re.finditer(rf"\b{re.escape(trigger)}\b[:,]?\s+", lowered):
+            candidates += _with_cuts(text[match.end() :].strip())
     tokens = text.split()
-    candidates.append(text)
+    candidates += _with_cuts(text)
     if len(tokens) > 1:
-        candidates.append(" ".join(tokens[1:]))
+        candidates += _with_cuts(" ".join(tokens[1:]))
     for size in (1, 2, 3, 4):
         if len(tokens) > size:
             candidates.append(" ".join(tokens[-size:]))
@@ -148,6 +156,21 @@ def span_candidates(command: str, limit: int = 8) -> list[str]:
         if cleaned and cleaned.casefold() not in {item.casefold() for item in unique}:
             unique.append(cleaned)
     return unique[:limit]
+
+
+TIME_EXPRESSION = re.compile(
+    r"\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\d{1,2}:\d{2}|at \d{1,2}\b|noon|midnight|"
+    r"tomorrow|tonight|today|this (?:morning|afternoon|evening|weekend)|"
+    r"(?:next |on |this )?(?:mon|tues|wednes|thurs|fri|satur|sun)day|next week|"
+    r"on the \d{1,2}(?:st|nd|rd|th)?|in (?:\d+|an?|two|three|half an) "
+    r"(?:minutes?|mins?|hours?|days?|weeks?))\b",
+    re.I,
+)
+
+
+def has_time(command: str) -> bool:
+    """Whether a command names a time or date (the C# app parses it fully)."""
+    return bool(TIME_EXPRESSION.search(command))
 
 
 def parse_duration(command: str) -> int | None:

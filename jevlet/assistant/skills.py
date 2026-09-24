@@ -1,19 +1,25 @@
-"""The assistant's skill catalogue and the argument questions each skill needs.
+"""The assistant's skill catalogue, loaded from ``shared/skills.json``.
 
-Skill names and descriptions are the runtime criteria the model chooses between; argument
-options are built from the live environment (installed apps, open windows, visible controls)
-or copied from the command itself. The same builders produce training data and live queries.
+The same JSON is embedded in the C# app, so the skills, argument questions, catalogues, and risk
+floors used to generate training data are exactly the ones the product asks at runtime.
+Argument options are built from the live environment (installed apps, open windows, stored
+events and alarms, file search results) or copied from the command itself.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from .environment import KNOWN_FOLDERS, SETTINGS_PAGES, SHORTCUTS, WEBSITES
 from .text import shortlist, span_candidates
 
-NOT_APPLICABLE = "Not applicable"
-SKILL_QUESTION = "Which action does the command ask for?"
+CATALOGUE_PATH = Path(__file__).resolve().parents[2] / "shared" / "skills.json"
+_DATA = json.loads(CATALOGUE_PATH.read_text(encoding="utf-8"))
+
+NOT_APPLICABLE: str = _DATA["not_applicable"]
+SKILL_QUESTION: str = _DATA["skill_question"]
+CATALOGUES: dict = _DATA["catalogues"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,23 +28,15 @@ class Slot:
     question: str
 
 
-SLOTS = {
-    "app": Slot("app", "Which installed app does the command mean?"),
-    "window": Slot("window", "Which open window does the command mean?"),
-    "setting": Slot("setting", "Which Settings page does the command need?"),
-    "website": Slot("website", "Which website does the command mean?"),
-    "folder": Slot("folder", "Which folder does the command mean?"),
-    "shortcut": Slot("shortcut", "Which keyboard shortcut does the command mean?"),
-    "media": Slot("media", "Which playback action does the command mean?"),
-    "volume": Slot("volume", "Which volume change does the command mean?"),
-    "theme": Slot("theme", "Which color mode does the command mean?"),
-    "text": Slot("text", "Which part of the command is the text to use?"),
-    "service": Slot("service", "Which AI assistant should get the request?"),
+SLOTS = {key: Slot(key, question) for key, question in _DATA["slots"].items()}
+MEDIA_ACTIONS = tuple(CATALOGUES["media"])
+VOLUME_ACTIONS = tuple(CATALOGUES["volume"])
+THEMES = tuple(CATALOGUES["theme"])
+SERVICES = tuple(CATALOGUES["service"])
+FIXED_CHOICES = {
+    name: tuple(CATALOGUES[name])
+    for name in ("media", "volume", "theme", "service", "power", "radio", "brightness", "stopwatch")
 }
-MEDIA_ACTIONS = ("Play or pause", "Next track", "Previous track")
-VOLUME_ACTIONS = ("Volume up", "Volume down", "Mute or unmute")
-THEMES = ("Dark mode", "Light mode")
-SERVICES = ("Claude", "ChatGPT", "Gemini")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,30 +48,26 @@ class Skill:
     risk_floor: float = 0.0  # the gate never treats this skill as safer than this
     title: str = ""  # shown in the UI, formatted with argument values
     needs_screen: bool = False
+    optional_slots: tuple[str, ...] = ()
+    time: str = ""  # "", "duration", "required", or "optional"
+    icon: str = ""  # Segoe Fluent Icons code point used by the C# app
 
 
-SKILLS = (
-    Skill("open_app", "Open an app", "Launch an installed application.", ("app",), title="Open {app}"),
-    Skill("switch_window", "Switch window", "Bring an already open window to the front.", ("window",), title="Switch to {window}"),
-    Skill("close_window", "Close window", "Close an open window; the app may ask to save work.", ("window",), 0.15, "Close {window}"),
-    Skill("minimize_window", "Minimize window", "Minimize or hide an open window.", ("window",), title="Minimize {window}"),
-    Skill("maximize_window", "Maximize window", "Maximize or enlarge an open window.", ("window",), title="Maximize {window}"),
-    Skill("media", "Control playback", "Play, pause, or skip music and videos.", ("media",), title="{media}"),
-    Skill("volume", "Change volume", "Turn the system volume up, down, or mute it.", ("volume",), title="{volume}"),
-    Skill("settings", "Open settings", "Open a Windows Settings page.", ("setting",), title="Settings: {setting}"),
-    Skill("theme", "Change theme", "Switch Windows between dark mode and light mode.", ("theme",), title="{theme}"),
-    Skill("search", "Search the web", "Search the internet for something.", ("text",), title="Search the web for “{text}”"),
-    Skill("website", "Open website", "Open a well-known website in the browser.", ("website",), title="Open {website}"),
-    Skill("folder", "Open folder", "Open a folder in File Explorer.", ("folder",), title="Open {folder}"),
-    Skill("type", "Type text", "Type the given words into the focused text field.", ("text",), 0.15, "Type “{text}”"),
-    Skill("shortcut", "Press shortcut", "Press a keyboard shortcut such as copy, paste, undo, save, or new tab.", ("shortcut",), title="{shortcut}"),
-    Skill("click", "Click on screen", "Click a button, tab, link, or menu item in the current window.", (), 0.1, "Click {control}", True),
-    Skill("timer", "Start timer", "Start a countdown timer or a reminder.", (), title="Timer for {duration}"),
-    Skill("screenshot", "Take screenshot", "Save a picture of the whole screen.", (), title="Take a screenshot"),
-    Skill("lock", "Lock computer", "Lock the screen.", (), title="Lock the computer"),
-    Skill("ask_ai", "Ask an AI", "Send a writing, explaining, analysis, or coding request to an AI assistant.", ("service", "text"), title="Ask {service}"),
-    Skill("clarify", "Ask for clarification", "The command is unclear, not possible here, or needs the user's own judgment.", (), 0.5, "I need more detail"),
-)  # fmt: skip
+SKILLS = tuple(
+    Skill(
+        key=row["key"],
+        name=row["name"],
+        description=row["description"],
+        slots=tuple(row.get("slots", ())),
+        risk_floor=float(row.get("risk_floor", 0.0)),
+        title=row.get("title", ""),
+        needs_screen=bool(row.get("needs_screen", False)),
+        optional_slots=tuple(row.get("optional_slots", ())),
+        time=row.get("time") or "",
+        icon=row.get("icon", ""),
+    )
+    for row in _DATA["skills"]
+)
 SKILL_BY_NAME = {skill.name: skill for skill in SKILLS}
 SKILL_BY_KEY = {skill.key: skill for skill in SKILLS}
 
@@ -85,6 +79,10 @@ class Environment:
     apps: list[str] = field(default_factory=list)
     windows: list[str] = field(default_factory=list)  # "process: title", most recent first
     current_window: str = ""
+    events: list[str] = field(default_factory=list)  # "title · when"
+    alarms: list[str] = field(default_factory=list)  # "07:30 · label"
+    todos: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)  # file names from a search
 
 
 def window_label(process: str, title: str) -> str:
@@ -98,26 +96,17 @@ def slot_options(slot: str, command: str, env: Environment) -> list[str]:
         options = shortlist(command, env.apps, 8)
     elif slot == "window":
         others = [window for window in env.windows if window != env.current_window]
-        options = ([f"Current window ({env.current_window})"] if env.current_window else [])
+        options = [f"Current window ({env.current_window})"] if env.current_window else []
         options += shortlist(command, others, 7)
+    elif slot in {"event", "alarm", "todo", "file"}:
+        pool = {"event": env.events, "alarm": env.alarms, "todo": env.todos, "file": env.files}
+        options = shortlist(command, pool[slot], 8)
     # Short fixed catalogues are offered whole: "pair my headphones" shares no words with
     # "Bluetooth and devices", so a lexical shortlist would drop the answer.
-    elif slot == "setting":
-        options = list(SETTINGS_PAGES)
-    elif slot == "website":
-        options = list(WEBSITES)
-    elif slot == "folder":
-        options = list(KNOWN_FOLDERS)
-    elif slot == "shortcut":
-        options = list(SHORTCUTS)
-    elif slot == "media":
-        options = list(MEDIA_ACTIONS)
-    elif slot == "volume":
-        options = list(VOLUME_ACTIONS)
-    elif slot == "theme":
-        options = list(THEMES)
-    elif slot == "service":
-        options = list(SERVICES)
+    elif slot in {"setting", "website", "folder", "shortcut"}:
+        options = list(CATALOGUES[slot])
+    elif slot in FIXED_CHOICES:
+        options = list(FIXED_CHOICES[slot])
     elif slot == "text":
         options = span_candidates(command, 8)
     else:

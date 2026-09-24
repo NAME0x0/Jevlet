@@ -16,6 +16,8 @@ from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 
+from .skills import CATALOGUES
+
 CACHE = Path(__file__).resolve().parents[2] / "data" / "apps_cache.json"
 NOISE = ("uninstall", "help", "readme", "documentation", "release notes", "license", "website")
 
@@ -33,94 +35,13 @@ class Window:
     process: str
 
 
-# ms-settings pages, named the way people ask for them.
-SETTINGS_PAGES = {
-    "Display and brightness": "ms-settings:display",
-    "Sound and volume devices": "ms-settings:sound",
-    "Bluetooth and devices": "ms-settings:bluetooth",
-    "Wi-Fi networks": "ms-settings:network-wifi",
-    "VPN": "ms-settings:network-vpn",
-    "Wallpaper and background": "ms-settings:personalization-background",
-    "Colors and dark mode": "ms-settings:colors",
-    "Windows Update": "ms-settings:windowsupdate",
-    "Installed apps": "ms-settings:appsfeatures",
-    "Default apps": "ms-settings:defaultapps",
-    "Camera privacy": "ms-settings:privacy-webcam",
-    "Microphone privacy": "ms-settings:privacy-microphone",
-    "Power and battery": "ms-settings:powersleep",
-    "Storage": "ms-settings:storagesense",
-    "Keyboard and typing": "ms-settings:typing",
-    "Date, time, and time zone": "ms-settings:dateandtime",
-    "Notifications": "ms-settings:notifications",
-    "Mouse": "ms-settings:mousetouchpad",
-    "Printers and scanners": "ms-settings:printers",
-    "Accounts and sign-in": "ms-settings:signinoptions",
-    "Language and region": "ms-settings:regionlanguage",
-    "Accessibility text size": "ms-settings:easeofaccess-display",
-    "Multiple displays": "ms-settings:display-advanced",
-    "Focus and do not disturb": "ms-settings:quiethours",
-}
-
-KNOWN_FOLDERS = {
-    "Downloads": "shell:Downloads",
-    "Documents": "shell:Personal",
-    "Desktop": "shell:Desktop",
-    "Pictures": "shell:My Pictures",
-    "Music": "shell:My Music",
-    "Videos": "shell:My Video",
-    "Screenshots": "shell:Screenshots",
-    "Recycle Bin": "shell:RecycleBinFolder",
-    "This PC": "shell:MyComputerFolder",
-    "Home folder": "shell:Profile",
-}
-
-WEBSITES = {
-    "YouTube": "https://www.youtube.com",
-    "Gmail": "https://mail.google.com",
-    "Google Drive": "https://drive.google.com",
-    "Google Calendar": "https://calendar.google.com",
-    "GitHub": "https://github.com",
-    "ChatGPT": "https://chatgpt.com",
-    "Claude": "https://claude.ai",
-    "Gemini": "https://gemini.google.com",
-    "Hugging Face": "https://huggingface.co",
-    "Google Colab": "https://colab.research.google.com",
-    "LinkedIn": "https://www.linkedin.com",
-    "Reddit": "https://www.reddit.com",
-    "X (Twitter)": "https://x.com",
-    "WhatsApp Web": "https://web.whatsapp.com",
-    "Netflix": "https://www.netflix.com",
-    "Amazon": "https://www.amazon.com",
-    "Wikipedia": "https://en.wikipedia.org",
-    "Google Maps": "https://maps.google.com",
-    "Outlook on the web": "https://outlook.office.com",
-    "Stack Overflow": "https://stackoverflow.com",
-}
-
+# Catalogues live in shared/skills.json so the C# app and the trainer use the same lists.
+SETTINGS_PAGES: dict[str, str] = dict(CATALOGUES["setting"])
+KNOWN_FOLDERS: dict[str, str] = dict(CATALOGUES["folder"])
+WEBSITES: dict[str, str] = dict(CATALOGUES["website"])
 # name -> (modifiers, key); resolved to virtual-key codes by the executor.
-SHORTCUTS = {
-    "Copy": (("ctrl",), "c"),
-    "Paste": (("ctrl",), "v"),
-    "Cut": (("ctrl",), "x"),
-    "Undo": (("ctrl",), "z"),
-    "Redo": (("ctrl",), "y"),
-    "Save": (("ctrl",), "s"),
-    "Select all": (("ctrl",), "a"),
-    "Find on page": (("ctrl",), "f"),
-    "New tab": (("ctrl",), "t"),
-    "Close tab": (("ctrl",), "w"),
-    "Reopen closed tab": (("ctrl", "shift"), "t"),
-    "Refresh": ((), "f5"),
-    "Zoom in": (("ctrl",), "plus"),
-    "Zoom out": (("ctrl",), "minus"),
-    "Print": (("ctrl",), "p"),
-    "Show desktop": (("win",), "d"),
-    "Task view": (("win",), "tab"),
-    "Snip a screenshot": (("win", "shift"), "s"),
-    "Emoji panel": (("win",), "period"),
-    "Clipboard history": (("win",), "v"),
-    "Next virtual desktop": (("win", "ctrl"), "right"),
-    "Previous virtual desktop": (("win", "ctrl"), "left"),
+SHORTCUTS: dict[str, tuple[tuple[str, ...], str]] = {
+    name: (tuple(modifiers), key) for name, (modifiers, key) in CATALOGUES["shortcut"].items()
 }
 
 
