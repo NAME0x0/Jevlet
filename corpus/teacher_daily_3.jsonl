@@ -1,0 +1,74 @@
+{"t": "pay the plumber's invoice from my business account", "w": "Bank portal - Pay bills", "r": {"Human": 0.95, "Local": 0.05}, "k": 0.97}
+{"t": "accept the counteroffer from the buyer on my car", "w": "Outlook - RE: offer", "r": {"Human": 0.97, "Claude": 0.03}, "k": 0.95}
+{"t": "send my CV and passport copy to the recruiter", "w": "Outlook - New message", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.93}
+{"t": "approve Chen's expense report for 3,400 dirhams", "w": "Concur - Approvals", "r": {"Human": 0.97, "Local": 0.03}, "k": 0.9}
+{"t": "unsubscribe from the gym and stop the monthly payment", "w": "Edge - FitClub account", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.85}
+{"t": "tell the landlord I'm moving out at the end of next month", "w": "WhatsApp - Landlord", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.9}
+{"t": "grant the contractor write access to our production database", "w": "Azure portal - Access control", "r": {"Human": 0.98, "Codex": 0.02}, "k": 0.97}
+{"t": "submit the quarterly VAT return", "w": "FTA portal - Returns", "r": {"Human": 0.97, "Local": 0.03}, "k": 0.95}
+{"t": "reply-all to the board with the revised numbers", "w": "Outlook - Board update", "r": {"Human": 0.85, "Claude": 0.15}, "k": 0.9}
+{"t": "delete my Facebook account for good", "w": "Edge - Facebook settings", "r": {"Human": 0.95, "Local": 0.05}, "k": 0.98}
+{"t": "buy the 2TB SSD in my cart", "w": "Edge - Amazon checkout", "r": {"Human": 0.95, "Local": 0.05}, "k": 0.95}
+{"t": "confirm the dentist appointment and pay the deposit", "w": "Edge - clinic booking", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.85}
+{"t": "should I take the lower paying job with better hours", "w": "Desktop", "r": {"Human": 0.8, "Claude": 0.2}, "k": 0.05}
+{"t": "decide whether we launch Monday or wait for the fix", "w": "Slack - #release", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.3}
+{"t": "fire off the termination letter to the underperforming vendor", "w": "Outlook - Draft", "r": {"Human": 0.95, "Claude": 0.05}, "k": 0.95}
+{"t": "publish the blog post to the company site now", "w": "WordPress - Edit post", "r": {"Human": 0.85, "Local": 0.15}, "k": 0.85}
+{"t": "share the patient spreadsheet with the new intern", "w": "Excel - patients.xlsx", "r": {"Human": 0.97, "Local": 0.03}, "k": 0.98}
+{"t": "move 10k from savings into the brokerage account", "w": "Bank portal - Transfers", "r": {"Human": 0.97, "Local": 0.03}, "k": 0.97}
+{"t": "e-sign the offer letter", "w": "DocuSign - Offer.pdf", "r": {"Human": 0.97, "Local": 0.03}, "k": 0.97}
+{"t": "tweet the product announcement from the company account", "w": "Edge - X", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.9}
+{"t": "tell me honestly if I should break up with him", "w": "Desktop", "r": {"Human": 0.85, "Claude": 0.15}, "k": 0.05}
+{"t": "turn off two-factor authentication on my email", "w": "Edge - Account security", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.95}
+{"t": "force quit the database server, it's hung", "w": "Terminal - ssh db-1", "r": {"Human": 0.6, "Local": 0.25, "Codex": 0.15}, "k": 0.85}
+{"t": "cancel tonight's dinner reservation", "w": "Edge - OpenTable", "r": {"Human": 0.6, "Local": 0.4}, "k": 0.5}
+{"t": "RSVP yes to the wedding and pick the fish option", "w": "Edge - wedding site", "r": {"Human": 0.7, "Local": 0.3}, "k": 0.5}
+{"t": "give my brother remote access to fix my laptop", "w": "Quick Assist", "r": {"Human": 0.95, "Local": 0.05}, "k": 0.9}
+{"t": "pick which of these three quotes we go with for the roof", "w": "Acrobat - quotes.pdf", "r": {"Human": 0.75, "Claude": 0.25}, "k": 0.3}
+{"t": "forward the salary spreadsheet to finance", "w": "Outlook - Inbox", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.9}
+{"t": "report this phishing email and block the sender", "w": "Outlook - Suspicious message", "r": {"Local": 0.55, "Human": 0.45}, "k": 0.25}
+{"t": "lodge the insurance claim for the cracked windscreen", "w": "Edge - Insurer claims", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.85}
+{"t": "idk just sort it", "w": "Desktop", "r": {"Human": 0.9, "Local": 0.1}, "k": 0.1}
+{"t": "do the thing we talked about", "w": "Outlook - Inbox", "r": {"Human": 0.95, "Claude": 0.05}, "k": 0.1}
+{"t": "clean up", "w": "Explorer - Documents", "r": {"Human": 0.6, "Local": 0.4}, "k": 0.3}
+{"t": "help", "w": "Desktop", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.05}
+{"t": "make this work properly", "w": "Excel - budget.xlsx", "r": {"Human": 0.7, "Codex": 0.2, "Local": 0.1}, "k": 0.1}
+{"t": "finish what I started earlier", "w": "Word - Document1", "r": {"Human": 0.9, "Claude": 0.1}, "k": 0.1}
+{"t": "whatever you think is best", "w": "Desktop", "r": {"Human": 0.95, "Claude": 0.05}, "k": 0.1}
+{"t": "update it", "w": "Settings - Windows Update", "r": {"Local": 0.6, "Human": 0.4}, "k": 0.2}
+{"t": "yo can u summarise this pdf real quick", "w": "Acrobat - whitepaper.pdf", "r": {"Claude": 0.97, "Gemini": 0.03}, "k": 0.01}
+{"t": "pls fix the bug where login loops forever", "w": "VS Code - auth/session.ts", "r": {"Codex": 0.98, "Human": 0.02}, "k": 0.03}
+{"t": "whats in this pic", "w": "Photos - IMG_0042.jpg", "r": {"Gemini": 0.98, "Claude": 0.02}, "k": 0.01}
+{"t": "louder", "w": "Spotify - Playing", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.01}
+{"t": "weather tmrw?", "w": "Desktop", "r": {"Retrieval": 0.98, "Local": 0.02}, "k": 0.01}
+{"t": "wheres that invoice from acme", "w": "Outlook - Inbox", "r": {"Retrieval": 0.95, "Human": 0.05}, "k": 0.02}
+{"t": "go dark mode", "w": "Settings - Personalization", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "tests r failing again ugh", "w": "Terminal - pytest: 3 failed", "r": {"Codex": 0.97, "Human": 0.03}, "k": 0.02}
+{"t": "write a haiku about monday mornings", "w": "Desktop", "r": {"Claude": 0.99, "Human": 0.01}, "k": 0.01}
+{"t": "is this email from my bank real or a scam", "w": "Outlook - Urgent: verify account", "r": {"Claude": 0.45, "Human": 0.35, "Retrieval": 0.2}, "k": 0.3}
+{"t": "check if the screenshot of this receipt matches what I was charged online", "w": "Photos - receipt.png", "r": {"Gemini": 0.6, "Retrieval": 0.3, "Human": 0.1}, "k": 0.1}
+{"t": "estimate how long this dataset will take to download on my connection", "w": "Edge - dataset page", "r": {"Local": 0.4, "Retrieval": 0.35, "Claude": 0.25}, "k": 0.01}
+{"t": "find a cheaper phone plan and switch me to it", "w": "Edge - carrier site", "r": {"Human": 0.6, "Retrieval": 0.4}, "k": 0.8}
+{"t": "research the best standing desks under 500 dollars", "w": "Edge - New tab", "r": {"Retrieval": 0.85, "Claude": 0.15}, "k": 0.02}
+{"t": "what does this chart of my sleep data say about my habits", "w": "Photos - sleep_chart.png", "r": {"Gemini": 0.75, "Claude": 0.25}, "k": 0.01}
+{"t": "draft and schedule the newsletter for 9am tomorrow", "w": "Mailchimp - Campaigns", "r": {"Claude": 0.45, "Human": 0.45, "Local": 0.1}, "k": 0.7}
+{"t": "turn my recorded lecture into flashcards", "w": "Voice Recorder - bio_lecture.m4a", "r": {"Gemini": 0.6, "Claude": 0.4}, "k": 0.01}
+{"t": "compare our API latency graphs from before and after the release", "w": "Grafana - API dashboard", "r": {"Gemini": 0.45, "Codex": 0.35, "Claude": 0.2}, "k": 0.02}
+{"t": "look up this error code and fix it in my script", "w": "Terminal - Traceback", "r": {"Codex": 0.7, "Retrieval": 0.3}, "k": 0.03}
+{"t": "make a spreadsheet of my subscriptions and what they cost", "w": "Excel - Book1", "r": {"Local": 0.3, "Claude": 0.35, "Retrieval": 0.2, "Codex": 0.15}, "k": 0.05}
+{"t": "which of these photos is sharpest, keep that one and delete the rest", "w": "Explorer - Pictures\\Burst", "r": {"Gemini": 0.55, "Human": 0.3, "Local": 0.15}, "k": 0.7}
+{"t": "explain what these kubectl logs say is wrong", "w": "Terminal - kubectl logs", "r": {"Codex": 0.75, "Claude": 0.25}, "k": 0.02}
+{"t": "book a meeting room for 3pm and invite the design team", "w": "Outlook - Calendar", "r": {"Local": 0.45, "Human": 0.55}, "k": 0.45}
+{"t": "find out what my neighbor's wifi password is", "w": "Settings - Network", "r": {"Human": 0.95, "Retrieval": 0.05}, "k": 0.9}
+{"t": "log into my coworker's account and grab the file", "w": "Edge - SharePoint", "r": {"Human": 0.98, "Local": 0.02}, "k": 0.98}
+{"t": "download the whole company contact list to my personal drive", "w": "Outlook - People", "r": {"Human": 0.95, "Local": 0.05}, "k": 0.95}
+{"t": "set up auto-reply saying I'm on leave until the 5th", "w": "Outlook - Settings", "r": {"Local": 0.55, "Claude": 0.25, "Human": 0.2}, "k": 0.3}
+{"t": "archive all newsletters older than a month", "w": "Outlook - Inbox", "r": {"Local": 0.8, "Human": 0.2}, "k": 0.3}
+{"t": "rename my holiday photos by the date they were taken", "w": "Explorer - Pictures\\Holiday", "r": {"Local": 0.65, "Codex": 0.35}, "k": 0.1}
+{"t": "translate the menu in this photo", "w": "Photos - menu.jpg", "r": {"Gemini": 0.95, "Claude": 0.05}, "k": 0.01}
+{"t": "summarize this podcast episode for me", "w": "Media Player - episode_214.mp3", "r": {"Gemini": 0.85, "Claude": 0.15}, "k": 0.01}
+{"t": "what did we decide in last week's standup, it's somewhere in my notes", "w": "OneNote - Standups", "r": {"Retrieval": 0.85, "Claude": 0.15}, "k": 0.01}
+{"t": "find a vegetarian recipe that uses the chickpeas I have", "w": "Desktop", "r": {"Retrieval": 0.55, "Claude": 0.45}, "k": 0.01}
+{"t": "tell my team the release is delayed", "w": "Teams - Release channel", "r": {"Human": 0.6, "Claude": 0.4}, "k": 0.6}
+{"t": "block every website except the ones I need for work until 5pm", "w": "Desktop", "r": {"Local": 0.8, "Codex": 0.1, "Human": 0.1}, "k": 0.15}
+{"t": "wipe the old laptop before I sell it", "w": "Settings - Recovery", "r": {"Human": 0.7, "Local": 0.3}, "k": 0.95}

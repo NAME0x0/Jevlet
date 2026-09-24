@@ -1,0 +1,69 @@
+{"t": "what does the error dialog in this screenshot say", "w": "Snipping Tool - Screenshot 2026-09-24", "r": {"Gemini": 0.95, "Claude": 0.05}, "k": 0.01}
+{"t": "how many people are in this group photo", "w": "Photos - team_offsite.jpg", "r": {"Gemini": 0.98, "Local": 0.02}, "k": 0.01}
+{"t": "is this mole photo something I should worry about", "w": "Photos - IMG_8812.jpg", "r": {"Gemini": 0.5, "Human": 0.5}, "k": 0.3}
+{"t": "pull the numbers out of this photographed invoice into a table", "w": "Photos - invoice_scan.jpg", "r": {"Gemini": 0.92, "Codex": 0.04, "Claude": 0.04}, "k": 0.03}
+{"t": "what song is playing in this video clip", "w": "Media Player - party.mp4", "r": {"Gemini": 0.85, "Retrieval": 0.15}, "k": 0.01}
+{"t": "describe this floor plan image so I can tell the architect", "w": "Photos - floorplan.png", "r": {"Gemini": 0.95, "Claude": 0.05}, "k": 0.01}
+{"t": "does this wiring diagram match the photo of my fuse box", "w": "Photos - fusebox.jpg", "r": {"Gemini": 0.7, "Human": 0.3}, "k": 0.35}
+{"t": "turn the slides in this lecture video into notes", "w": "Media Player - lecture_07.mp4", "r": {"Gemini": 0.85, "Claude": 0.15}, "k": 0.01}
+{"t": "what's the license plate in this dashcam frame", "w": "Photos - dashcam_0419.png", "r": {"Gemini": 0.9, "Human": 0.1}, "k": 0.15}
+{"t": "compare these two X-ray-looking screenshots from the vet", "w": "Photos - vet_scan_1.png", "r": {"Gemini": 0.6, "Human": 0.4}, "k": 0.2}
+{"t": "tell me what the speaker says about pricing in this recording", "w": "Voice Recorder - sales_call.m4a", "r": {"Gemini": 0.9, "Claude": 0.1}, "k": 0.05}
+{"t": "which of these logo drafts looks most professional", "w": "Explorer - logo_options", "r": {"Gemini": 0.8, "Human": 0.2}, "k": 0.01}
+{"t": "read the handwriting on this birthday card", "w": "Photos - card.jpg", "r": {"Gemini": 0.98, "Claude": 0.02}, "k": 0.01}
+{"t": "find the frame in this video where the goal happens", "w": "Media Player - match.mp4", "r": {"Gemini": 0.95, "Local": 0.05}, "k": 0.01}
+{"t": "check this product photo for anything that violates the marketplace rules", "w": "Photos - listing.png", "r": {"Gemini": 0.75, "Retrieval": 0.15, "Human": 0.1}, "k": 0.05}
+{"t": "what does this road sign mean, it's in Japanese", "w": "Photos - tokyo_sign.jpg", "r": {"Gemini": 0.95, "Retrieval": 0.05}, "k": 0.01}
+{"t": "generate alt text for the images on our homepage", "w": "Edge - localhost:3000", "r": {"Gemini": 0.85, "Codex": 0.15}, "k": 0.01}
+{"t": "listen to this voicemail and tell me who called", "w": "Voice Recorder - voicemail_3.wav", "r": {"Gemini": 0.95, "Local": 0.05}, "k": 0.05}
+{"t": "does my outfit in this mirror selfie look okay for an interview", "w": "Photos - selfie.jpg", "r": {"Gemini": 0.9, "Human": 0.1}, "k": 0.02}
+{"t": "extract the whiteboard diagram from this photo into a mermaid chart", "w": "Photos - whiteboard_arch.jpg", "r": {"Gemini": 0.75, "Codex": 0.25}, "k": 0.01}
+{"t": "what time does the pharmacy near me close tonight", "w": "Desktop", "r": {"Retrieval": 0.97, "Local": 0.03}, "k": 0.01}
+{"t": "has the EU AI Act compliance deadline changed this year", "w": "Edge - New tab", "r": {"Retrieval": 0.9, "Claude": 0.1}, "k": 0.01}
+{"t": "find the PDF manual for my Bosch dishwasher model", "w": "Edge - New tab", "r": {"Retrieval": 0.97, "Local": 0.03}, "k": 0.01}
+{"t": "where did I save the signed NDA from Vertex Labs", "w": "Explorer - Documents", "r": {"Retrieval": 0.9, "Local": 0.1}, "k": 0.02}
+{"t": "what's the latest version of the transformers library", "w": "Terminal - pip", "r": {"Retrieval": 0.95, "Codex": 0.05}, "k": 0.01}
+{"t": "look up the train times from Dubai to Abu Dhabi tomorrow morning", "w": "Desktop", "r": {"Retrieval": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "search my email for the Wi-Fi password the hotel sent", "w": "Outlook - Inbox", "r": {"Retrieval": 0.95, "Local": 0.05}, "k": 0.05}
+{"t": "is the RTX A2000 supported by the newest CUDA toolkit", "w": "Edge - New tab", "r": {"Retrieval": 0.95, "Codex": 0.05}, "k": 0.01}
+{"t": "what are people saying about the new MacBook keyboard problems", "w": "Edge - New tab", "r": {"Retrieval": 0.95, "Claude": 0.05}, "k": 0.01}
+{"t": "find last month's electricity bill in my downloads", "w": "Explorer - Downloads", "r": {"Retrieval": 0.85, "Local": 0.15}, "k": 0.02}
+{"t": "check whether my flight EK 204 is delayed", "w": "Desktop", "r": {"Retrieval": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "what is the current prime rate", "w": "Desktop", "r": {"Retrieval": 0.98, "Claude": 0.02}, "k": 0.01}
+{"t": "which of my notes talk about the kitchen renovation budget", "w": "OneNote - Home", "r": {"Retrieval": 0.95, "Claude": 0.05}, "k": 0.01}
+{"t": "get me the official docs page for Windows UI Automation cache requests", "w": "Edge - New tab", "r": {"Retrieval": 0.95, "Codex": 0.05}, "k": 0.01}
+{"t": "what did the city council decide about the new bike lanes", "w": "Edge - New tab", "r": {"Retrieval": 0.97, "Claude": 0.03}, "k": 0.01}
+{"t": "find the Slack message where Priya shared the staging password", "w": "Slack - Search", "r": {"Retrieval": 0.85, "Human": 0.15}, "k": 0.3}
+{"t": "how much is the Emirates baggage fee for a second bag right now", "w": "Edge - New tab", "r": {"Retrieval": 0.97, "Claude": 0.03}, "k": 0.01}
+{"t": "who is the current CEO of Northwind", "w": "Desktop", "r": {"Retrieval": 0.98, "Claude": 0.02}, "k": 0.01}
+{"t": "locate the spreadsheet where I tracked my running times", "w": "Explorer - Documents", "r": {"Retrieval": 0.85, "Local": 0.15}, "k": 0.01}
+{"t": "what's trending on hacker news today", "w": "Edge - New tab", "r": {"Retrieval": 0.98, "Local": 0.02}, "k": 0.01}
+{"t": "open Spotify", "w": "Desktop", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "turn the brightness down, my eyes hurt", "w": "Word - notes.docx", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "connect to the office wifi", "w": "Settings - Network", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.03}
+{"t": "move all the screenshots on my desktop into a Screenshots folder", "w": "Desktop", "r": {"Local": 0.9, "Codex": 0.1}, "k": 0.08}
+{"t": "set my status to do not disturb for two hours", "w": "Teams - Chat", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.02}
+{"t": "restart the audio driver, the sound stopped working", "w": "Settings - Sound", "r": {"Local": 0.85, "Codex": 0.1, "Human": 0.05}, "k": 0.1}
+{"t": "open the folder where Chrome saves downloads", "w": "Chrome - Downloads", "r": {"Local": 0.95, "Retrieval": 0.05}, "k": 0.01}
+{"t": "put this window on my second monitor", "w": "Excel - forecast.xlsx", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "extract the zip file I just downloaded", "w": "Explorer - Downloads", "r": {"Local": 0.97, "Codex": 0.03}, "k": 0.04}
+{"t": "switch my keyboard layout to Arabic", "w": "Desktop", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "start a 5 minute break timer", "w": "VS Code - main.py", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "turn off the laptop camera light by disabling the webcam", "w": "Settings - Privacy", "r": {"Local": 0.9, "Human": 0.1}, "k": 0.1}
+{"t": "copy these photos from the SD card to my Pictures folder", "w": "Explorer - SD card (E:)", "r": {"Local": 0.97, "Codex": 0.03}, "k": 0.05}
+{"t": "reopen the browser tab I just closed", "w": "Edge - New tab", "r": {"Local": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "print page 3 of this PDF", "w": "Acrobat - brochure.pdf", "r": {"Local": 0.97, "Human": 0.03}, "k": 0.02}
+{"t": "show me how much disk space is left", "w": "Explorer - This PC", "r": {"Local": 0.95, "Retrieval": 0.05}, "k": 0.01}
+{"t": "kill the process that's eating all my CPU", "w": "Task Manager - Processes", "r": {"Local": 0.8, "Human": 0.2}, "k": 0.35}
+{"t": "shut down the laptop in 30 minutes", "w": "Desktop", "r": {"Local": 0.9, "Human": 0.1}, "k": 0.25}
+{"t": "clear my browser cache but keep saved passwords", "w": "Edge - Settings", "r": {"Local": 0.92, "Human": 0.08}, "k": 0.2}
+{"t": "delete the node_modules folders in my old projects to free space", "w": "Explorer - Projects", "r": {"Local": 0.75, "Codex": 0.15, "Human": 0.1}, "k": 0.45}
+{"t": "permanently erase the files in the old-clients folder", "w": "Explorer - Documents", "r": {"Local": 0.5, "Human": 0.5}, "k": 0.95}
+{"t": "uninstall all the games I never play", "w": "Settings - Apps", "r": {"Local": 0.6, "Human": 0.4}, "k": 0.6}
+{"t": "reset this PC to factory settings", "w": "Settings - Recovery", "r": {"Human": 0.8, "Local": 0.2}, "k": 0.98}
+{"t": "turn on the VPN before I open the bank site", "w": "Desktop", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.05}
+{"t": "mute notifications from the family group chat", "w": "WhatsApp - Family", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.01}
+{"t": "take a screenshot of just this chart and save it to Desktop", "w": "Excel - sales.xlsx", "r": {"Local": 0.97, "Gemini": 0.03}, "k": 0.01}
+{"t": "change the default browser to Firefox", "w": "Settings - Default apps", "r": {"Local": 0.95, "Human": 0.05}, "k": 0.05}
+{"t": "overwrite the old thesis file with this new version", "w": "Explorer - Thesis", "r": {"Local": 0.65, "Human": 0.35}, "k": 0.7}
+{"t": "empty my Downloads folder, everything in there is junk", "w": "Explorer - Downloads", "r": {"Local": 0.6, "Human": 0.4}, "k": 0.85}

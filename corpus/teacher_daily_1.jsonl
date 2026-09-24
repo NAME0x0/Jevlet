@@ -1,0 +1,75 @@
+{"t": "the date picker shows yesterday for users in UTC+4, track down the timezone bug", "w": "VS Code - components/DatePicker.tsx", "r": {"Codex": 0.95, "Claude": 0.05}, "k": 0.03}
+{"t": "write a regex that pulls order numbers like ORD-12345 out of these log lines", "w": "Notepad++ - app.log", "r": {"Codex": 0.85, "Claude": 0.15}, "k": 0.02}
+{"t": "our Docker image is 2GB, slim it down", "w": "VS Code - Dockerfile", "r": {"Codex": 0.95, "Claude": 0.05}, "k": 0.04}
+{"t": "set up pre-commit hooks for ruff and black in this repo", "w": "Terminal - git status", "r": {"Codex": 0.95, "Local": 0.05}, "k": 0.03}
+{"t": "the API returns 500 when the cart is empty, patch the handler", "w": "PyCharm - cart/views.py", "r": {"Codex": 0.97, "Human": 0.03}, "k": 0.04}
+{"t": "convert this callback-heavy node code to async/await", "w": "VS Code - legacy/upload.js", "r": {"Codex": 0.97, "Claude": 0.03}, "k": 0.02}
+{"t": "why is this pandas groupby so slow on 10 million rows", "w": "Jupyter - analysis.ipynb", "r": {"Codex": 0.8, "Claude": 0.12, "Retrieval": 0.08}, "k": 0.02}
+{"t": "add pagination to the /users endpoint with cursor tokens", "w": "VS Code - api/users.go", "r": {"Codex": 0.97, "Claude": 0.03}, "k": 0.03}
+{"t": "write a GitHub Action that publishes the package when I tag a release", "w": "Edge - GitHub Actions docs", "r": {"Codex": 0.9, "Retrieval": 0.1}, "k": 0.1}
+{"t": "fix the memory leak in the websocket reconnect loop", "w": "VS Code - ws/client.ts", "r": {"Codex": 0.98, "Claude": 0.02}, "k": 0.03}
+{"t": "rename the variable usr to user across the whole project", "w": "VS Code - src/", "r": {"Codex": 0.9, "Local": 0.1}, "k": 0.05}
+{"t": "generate fixtures for the orders table so the tests stop hitting prod", "w": "PyCharm - tests/conftest.py", "r": {"Codex": 0.95, "Human": 0.05}, "k": 0.08}
+{"t": "the android build fails with a gradle sync error after upgrading AGP", "w": "Android Studio - build.gradle", "r": {"Codex": 0.85, "Retrieval": 0.15}, "k": 0.03}
+{"t": "write a bash one-liner to find the ten largest files under /var/log", "w": "Terminal - ssh prod-web-2", "r": {"Codex": 0.8, "Local": 0.15, "Claude": 0.05}, "k": 0.08}
+{"t": "turn this SQL query into an ORM query with SQLAlchemy", "w": "DBeaver - reports.sql", "r": {"Codex": 0.96, "Claude": 0.04}, "k": 0.02}
+{"t": "hook up Sentry error reporting in the flask app", "w": "VS Code - app/__init__.py", "r": {"Codex": 0.92, "Retrieval": 0.08}, "k": 0.05}
+{"t": "the unit tests pass locally but fail in CI with a locale error", "w": "GitHub - Actions run failed", "r": {"Codex": 0.95, "Retrieval": 0.05}, "k": 0.02}
+{"t": "write a Terraform module for an S3 bucket with versioning", "w": "VS Code - infra/storage.tf", "r": {"Codex": 0.95, "Human": 0.05}, "k": 0.12}
+{"t": "make the sidebar collapse on mobile widths", "w": "VS Code - styles/layout.css", "r": {"Codex": 0.97, "Gemini": 0.03}, "k": 0.01}
+{"t": "benchmark json vs orjson for our payloads and pick the faster one", "w": "Terminal - python", "r": {"Codex": 0.9, "Retrieval": 0.1}, "k": 0.02}
+{"t": "explain what this recursive function does line by line", "w": "VS Code - tree_utils.py", "r": {"Codex": 0.55, "Claude": 0.45}, "k": 0.01}
+{"t": "write docstrings for every public function in this module", "w": "VS Code - geometry.py", "r": {"Codex": 0.8, "Claude": 0.2}, "k": 0.01}
+{"t": "review this terraform plan before I apply it to production", "w": "Terminal - terraform plan", "r": {"Codex": 0.55, "Human": 0.45}, "k": 0.55}
+{"t": "delete the stale feature branches older than six months from the remote", "w": "Terminal - git branch -r", "r": {"Codex": 0.35, "Human": 0.45, "Local": 0.2}, "k": 0.8}
+{"t": "run the database migration on the production cluster", "w": "Terminal - kubectl", "r": {"Human": 0.7, "Codex": 0.3}, "k": 0.9}
+{"t": "roll back last night's deploy, checkout is broken for everyone", "w": "Slack - #incidents", "r": {"Human": 0.6, "Codex": 0.4}, "k": 0.85}
+{"t": "rotate the leaked AWS key that someone pushed to GitHub", "w": "Edge - GitHub security alert", "r": {"Human": 0.65, "Codex": 0.35}, "k": 0.9}
+{"t": "write a unit test that reproduces issue 482 before we fix it", "w": "Edge - Issue #482", "r": {"Codex": 0.97, "Claude": 0.03}, "k": 0.02}
+{"t": "the Excel macro crashes on row 1048576, fix the VBA", "w": "Excel - Macro editor", "r": {"Codex": 0.9, "Local": 0.05, "Claude": 0.05}, "k": 0.04}
+{"t": "port the matlab signal filter to numpy", "w": "MATLAB - filter_design.m", "r": {"Codex": 0.97, "Claude": 0.03}, "k": 0.01}
+{"t": "set up a python virtual environment and install the requirements", "w": "Terminal - PowerShell", "r": {"Codex": 0.6, "Local": 0.4}, "k": 0.05}
+{"t": "add a dark theme toggle to the settings page of our web app", "w": "VS Code - SettingsPage.vue", "r": {"Codex": 0.98, "Local": 0.02}, "k": 0.01}
+{"t": "fix the failing snapshot tests after the button redesign", "w": "Terminal - jest: 7 failed", "r": {"Codex": 0.97, "Gemini": 0.03}, "k": 0.03}
+{"t": "write a script that backs up my Documents folder to the NAS every night", "w": "Explorer - Documents", "r": {"Codex": 0.7, "Local": 0.3}, "k": 0.2}
+{"t": "check this pull request for SQL injection", "w": "Edge - Pull request #88", "r": {"Codex": 0.92, "Human": 0.08}, "k": 0.05}
+{"t": "why does git say detached HEAD and how do I get my commits back", "w": "Terminal - git log", "r": {"Codex": 0.7, "Claude": 0.2, "Retrieval": 0.1}, "k": 0.15}
+{"t": "optimize the slow dashboard query, it takes 14 seconds", "w": "pgAdmin - query tool", "r": {"Codex": 0.95, "Claude": 0.05}, "k": 0.06}
+{"t": "scaffold a FastAPI service with health and metrics endpoints", "w": "Terminal - mkdir svc", "r": {"Codex": 0.98, "Local": 0.02}, "k": 0.01}
+{"t": "translate the German comments in this file to English", "w": "VS Code - legacy_calc.c", "r": {"Codex": 0.45, "Claude": 0.55}, "k": 0.01}
+{"t": "resolve the merge conflict in package-lock.json", "w": "VS Code - package-lock.json", "r": {"Codex": 0.95, "Local": 0.05}, "k": 0.08}
+{"t": "write me a cover note for the grant application, around 300 words", "w": "Word - grant_application.docx", "r": {"Claude": 0.97, "Human": 0.03}, "k": 0.02}
+{"t": "tighten the abstract of my paper, it is way over the word limit", "w": "Overleaf - main.tex", "r": {"Claude": 0.9, "Codex": 0.1}, "k": 0.01}
+{"t": "what are the weak points in this business plan", "w": "Word - business_plan_v3.docx", "r": {"Claude": 0.9, "Human": 0.1}, "k": 0.02}
+{"t": "draft talking points for my one-on-one with my manager", "w": "OneNote - 1:1 prep", "r": {"Claude": 0.85, "Human": 0.15}, "k": 0.02}
+{"t": "rewrite this rejection email so it sounds kind but firm", "w": "Outlook - Draft", "r": {"Claude": 0.95, "Human": 0.05}, "k": 0.04}
+{"t": "summarize the key findings of this 60 page audit report", "w": "Acrobat - audit_2026.pdf", "r": {"Claude": 0.97, "Retrieval": 0.03}, "k": 0.03}
+{"t": "turn my bullet notes into a proper project update for the stakeholders", "w": "Word - notes.docx", "r": {"Claude": 0.97, "Human": 0.03}, "k": 0.02}
+{"t": "explain the difference between a Roth and a traditional retirement account in simple terms", "w": "Desktop", "r": {"Claude": 0.75, "Retrieval": 0.25}, "k": 0.03}
+{"t": "write a LinkedIn post announcing our product launch, keep it under 150 words", "w": "Edge - LinkedIn", "r": {"Claude": 0.9, "Human": 0.1}, "k": 0.1}
+{"t": "check this contract clause, does it let them cancel without notice", "w": "Acrobat - service_agreement.pdf", "r": {"Claude": 0.75, "Human": 0.25}, "k": 0.1}
+{"t": "come up with ten names for my bakery", "w": "Desktop", "r": {"Claude": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "make this README easier for beginners to follow", "w": "VS Code - README.md", "r": {"Claude": 0.75, "Codex": 0.25}, "k": 0.01}
+{"t": "write the minutes from this transcript of today's meeting", "w": "Teams - Transcript", "r": {"Claude": 0.95, "Gemini": 0.05}, "k": 0.04}
+{"t": "give me feedback on the structure of my short story", "w": "Google Docs - chapter_one", "r": {"Claude": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "draft a complaint letter to the airline about my lost bag", "w": "Word - letter.docx", "r": {"Claude": 0.93, "Human": 0.07}, "k": 0.05}
+{"t": "outline a lesson plan on photosynthesis for 12 year olds", "w": "Word - lesson_plans.docx", "r": {"Claude": 0.97, "Retrieval": 0.03}, "k": 0.01}
+{"t": "compare these two job descriptions and tell me which fits my CV better", "w": "Word - cv_2026.docx", "r": {"Claude": 0.8, "Human": 0.2}, "k": 0.03}
+{"t": "reword my resignation letter so it stays on good terms", "w": "Word - resignation.docx", "r": {"Claude": 0.85, "Human": 0.15}, "k": 0.08}
+{"t": "explain what this error in the lab report means for my experiment", "w": "Acrobat - lab_results.pdf", "r": {"Claude": 0.8, "Retrieval": 0.1, "Human": 0.1}, "k": 0.03}
+{"t": "write a thank-you note to the team that covered my shift", "w": "Outlook - New message", "r": {"Claude": 0.95, "Human": 0.05}, "k": 0.03}
+{"t": "turn this policy document into a one-page FAQ for employees", "w": "Word - remote_work_policy.docx", "r": {"Claude": 0.97, "Human": 0.03}, "k": 0.02}
+{"t": "draft a message to the landlord about the broken heater", "w": "WhatsApp - Landlord", "r": {"Claude": 0.9, "Human": 0.1}, "k": 0.05}
+{"t": "critique the methodology in this survey paper", "w": "Acrobat - survey_methods.pdf", "r": {"Claude": 0.95, "Retrieval": 0.05}, "k": 0.01}
+{"t": "rephrase this paragraph so it doesn't sound machine written", "w": "Google Docs - essay", "r": {"Claude": 0.98, "Human": 0.02}, "k": 0.01}
+{"t": "write a job posting for a junior data analyst", "w": "Word - hiring.docx", "r": {"Claude": 0.95, "Human": 0.05}, "k": 0.03}
+{"t": "summarize what everyone said in this 80 message slack thread", "w": "Slack - #product", "r": {"Claude": 0.95, "Retrieval": 0.05}, "k": 0.03}
+{"t": "help me explain to my kid why the sky is blue", "w": "Desktop", "r": {"Claude": 0.9, "Retrieval": 0.1}, "k": 0.01}
+{"t": "draft an agenda for Thursday's planning workshop", "w": "Outlook - Calendar", "r": {"Claude": 0.95, "Human": 0.05}, "k": 0.02}
+{"t": "translate this letter from the tax office into English and explain what they want", "w": "Acrobat - Finanzamt.pdf", "r": {"Claude": 0.85, "Human": 0.1, "Gemini": 0.05}, "k": 0.06}
+{"t": "write product descriptions for these five candles", "w": "Excel - products.xlsx", "r": {"Claude": 0.97, "Codex": 0.03}, "k": 0.01}
+{"t": "proof my speech for the conference and flag anything that drags", "w": "PowerPoint - keynote.pptx", "r": {"Claude": 0.95, "Gemini": 0.05}, "k": 0.01}
+{"t": "reply to Sam saying I can't make it Friday and send it", "w": "Outlook - Sam: Friday?", "r": {"Human": 0.45, "Claude": 0.45, "Local": 0.1}, "k": 0.55}
+{"t": "write the email to the client apologizing for the delay but don't send it yet", "w": "Outlook - Draft", "r": {"Claude": 0.93, "Human": 0.07}, "k": 0.05}
+{"t": "turn the chart in this slide into a paragraph of text", "w": "PowerPoint - results.pptx", "r": {"Gemini": 0.6, "Claude": 0.4}, "k": 0.01}
+{"t": "summarize the scanned PDF of the tenancy agreement", "w": "Acrobat - lease_scan.pdf", "r": {"Gemini": 0.45, "Claude": 0.55}, "k": 0.03}
