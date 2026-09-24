@@ -57,15 +57,35 @@ Python 3.11+ and PyTorch 2.3+. From `D:\Jevlet`:
 python -m pip install -e ".[dev,semantic,desktop,colab]"
 ```
 
-Use the daily-driver checkpoint (`data/daily/current.pt`, a 44 MB fp16 export):
+Start the assistant (tray icon, runs in the background):
 
 ```powershell
-python -m scripts.router_cli --checkpoint data/daily/current.pt route --question "Fix the failing tests in auth.py"
-python -m scripts.desktop --checkpoint data/daily/current.pt
-python -m scripts.ground_live --checkpoint data/daily/current.pt --task "close this tab"
+pythonw -m jevlet.app                   # or: python -m scripts.desktop
+python -m scripts.startup --install     # start it at sign-in; --remove to undo
 ```
 
-Without `--checkpoint`, the router and panel fall back to the zero-shot MiniLM router.
+Press **Alt+Space** (falls back to Alt+Shift+Space or Ctrl+Alt+J if taken) and type what you want.
+
+## The assistant
+
+| Key | Does |
+|---|---|
+| type | live interpretation: action, target, confidence, risk, latency |
+| Enter | run it; anything risky or uncertain needs Enter twice |
+| ↓ / ↑ | alternatives the model also considered |
+| Tab | **show me**: click the right control yourself; Jevlet records it as training data |
+| Esc | close; Enter on the empty bar undoes the last action |
+
+Skills: open apps (all Start-menu apps, including Store apps), switch/close/minimize/maximize
+windows, play/pause/skip, volume, Settings pages, dark/light mode, web search, websites,
+folders, typing text, keyboard shortcuts, clicking visible controls, timers, screenshots, lock,
+handing a request to Claude/ChatGPT/Gemini, and asking for clarification. "Open Spotify then play
+the next song" runs step by step, re-planning each step against the live screen.
+
+Every decision is a Jev-style choice over options found on your machine at that moment: installed
+apps, open windows, visible UI Automation controls, or spans of your own words. Jevlet never
+generates text and never automates a browser. Destructive requests (deleting, paying, sending on
+your behalf) are not skills, so they can only produce "I need more detail".
 
 ## System-One API
 
@@ -90,31 +110,31 @@ All questions run in one packed forward pass. Choices accept `name -> descriptio
 and up to 255 options (score independently and shortlist beyond that). Put anything every
 question needs into the state: branches cannot see each other's question text.
 
-## Desktop harness
+## Screen reading
 
-The panel (`scripts.desktop`) runs in your signed-in Windows session. It reads the foreground
-window through Windows UI Automation using one cached `FindAllBuildCache` call (~80 ms, versus ~630 ms
-through pywinauto), with no Playwright, Selenium, or headless browser. It can launch
-allowlisted apps, switch windows, focus a control, or type text, and every action is previewed
-and explicitly confirmed. Route and risk are asked in one pass; a task with P(risky) ≥ 0.5 can never reach
-`execute`, and nothing executes unattended until the model has been validated on 20 of your own
-held-out ratings. Screens and typed text are never saved.
-
-Screen grounding asks which visible control fits a task: the options are the window's
-actionable UI Automation controls, the Jev-style runtime criteria for a desktop.
+Windows UI Automation reads the foreground window in one cached `FindAllBuildCache` call
+(~80 ms, versus ~630 ms through pywinauto). Controls are activated through UIA patterns (Invoke,
+Select, Toggle, Expand) before falling back to a real click. Windows are focused without
+synthesized keys, because an Alt tap opens Office ribbon key tips. Screens are never saved.
 
 ## Learning from use
 
-Thumbs up records the suggestion as correct; thumbs down with a correction records the
-correction; a bare thumbs down is never a training label. Then:
+Jevlet learns from what you do, not from forms:
+
+- Running the top suggestion records it as correct; choosing an alternative with ↓ records a
+  correction.
+- **Tab → click** records a demonstration: the command, the window's controls, and the control you
+  actually clicked (low-level mouse hook + UI Automation element-at-point, stored locally).
+- `python -m scripts.capture_inventory` records the controls of your open apps (read-only), so
+  grounding training covers the apps you really use.
 
 ```powershell
 python -m scripts.personalize --checkpoint data/daily/current.pt
 ```
 
-Feedback splits 60/20/20 by decision id into fine-tune, temperature, and gate sets. The new
-model replaces `current.pt` only if held-out feedback accuracy holds, NLL improves, and general
-accuracy on replayed data drops by at most one point; the old model is kept as `previous.pt`.
+Ratings and demonstrations split 60/20/20 by stable id into fine-tune, temperature, and gate sets.
+A new model replaces `current.pt` only if held-out accuracy holds, NLL improves, and accuracy on
+replayed general data drops by at most one point. The old model is kept as `previous.pt`.
 
 ## Data
 

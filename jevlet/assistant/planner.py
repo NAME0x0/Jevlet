@@ -198,7 +198,11 @@ class Planner:
         if context.current is None:
             plan.missing = "control"
             return
-        controls = FastUIA().read(context.current.handle)
+        try:
+            controls = FastUIA().read(context.current.handle)
+        except Exception:  # noqa: BLE001 - window closed or refuses UI Automation
+            plan.missing = "control"
+            return
         target, choice, risk = ground(self.engine, plan.command, context.current.title, controls)
         plan.control = target
         plan.arg_confidence["control"] = choice.confidence
