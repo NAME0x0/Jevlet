@@ -49,9 +49,11 @@ def main() -> None:
     if args.checkpoint:
         if args.command == "adapt":
             parser.error("adapt tunes the zero-shot router; retrain checkpoints instead")
+        from jevlet.personalize import CALIBRATION_MINIMUM, validated_examples
         from jevlet.system_one import SystemOne
 
-        router = SystemOne(args.checkpoint)
+        validated = validated_examples(args.checkpoint) >= CALIBRATION_MINIMUM
+        router = SystemOne(args.checkpoint, calibrated=validated)
     else:
         router = SemanticRouter(
             model_name=args.model, feedback_store=store, adapter_path=args.adapter

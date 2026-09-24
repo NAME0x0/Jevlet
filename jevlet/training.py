@@ -274,7 +274,15 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     seed = int(config.get("seed", 1337))
     seed_everything(seed)
     device = resolve_device(config.get("device", "auto"))
-    model = build_model(config["model"]).to(device)
+    init_from = config["training"].get("init_from")
+    # Starting from a trained checkpoint needs its weights, not a fresh Hub download.
+    model = build_model(config["model"], load_weights=not init_from)
+    if init_from:
+        initial = torch.load(init_from, map_location="cpu", weights_only=True)
+        if initial["model_config"] != model.config.to_dict():
+            raise ValueError("init_from checkpoint model configuration differs")
+        model.load_state_dict(initial["model_state"])
+    model = model.to(device)
     if device.type == "cuda" and config.get("gpu_memory_fraction"):
         device_index = device.index if device.index is not None else torch.cuda.current_device()
         torch.cuda.set_per_process_memory_fraction(

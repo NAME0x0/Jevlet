@@ -36,9 +36,12 @@ def main() -> None:
             print("Loading the local routing model; first use may download it.", flush=True)
         store = FeedbackStore(args.router_db)
         if args.checkpoint:
+            from jevlet.personalize import CALIBRATION_MINIMUM, validated_examples
             from jevlet.system_one import SystemOne
 
-            router = SystemOne(str(args.checkpoint))
+            # Unattended execution unlocks only after validation on the user's own feedback.
+            validated = validated_examples(args.checkpoint) >= CALIBRATION_MINIMUM
+            router = SystemOne(str(args.checkpoint), calibrated=validated)
         else:
             router = SemanticRouter(
                 model_name=args.model, feedback_store=store, adapter_path=args.adapter

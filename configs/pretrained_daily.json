@@ -30,7 +30,7 @@
     "warmup_steps": 250,
     "min_lr_ratio": 0.05,
     "weight_decay": 0.01,
-    "loss": "ce",
+    "loss": "ce_brier",
     "amp_dtype": "fp16",
     "max_grad_norm": 1.0
   },
