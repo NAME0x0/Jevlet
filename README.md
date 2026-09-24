@@ -38,14 +38,16 @@ Two backbones share this topology, training loop, metrics, and API:
 
 ## Results so far (RTX A2000 4 GB)
 
-| Model | Mixture dev | Daily benchmark route | Risk accuracy / recall | CPU, 3 questions |
+| Model | Benchmark route | Route ECE | Risky tasks passing gate | Unseen-app grounding |
 |---|---|---|---|---|
-| Zero-shot MiniLM router | 52.2% | 44.9% | 45% / 55% | — |
-| Jevlet-P v1 (generic data) | 83.1% | 30.8% | 37% / 55% | 41.5 ms |
-| **Jevlet-P v2 (+ daily route/risk data)** | 91.8% | **91.0%** | **96% / 73%** | ~40 ms |
+| Zero-shot MiniLM router | 44.9% | 0.081 | — | 36% |
+| Jevlet-P v1 (generic data) | 30.8% | 0.102 | — | — |
+| Jevlet-P v2 (+ daily route/risk data) | 91.0% | 0.061 | 1 / 11 | — |
+| **Jevlet-P v3 (+ teacher, grounding; per-kind calibration)** | **92.3%** | **0.062** | **0 / 11** | 45–56% control, 81–89% "none" |
 
-The daily benchmark is 78 hand-written laptop tasks kept out of all training data
-(`jevlet/benchmarks.py`). Details, ablations, and caveats: `research/lab-notebook.md`.
+The benchmark is 78 hand-written laptop tasks kept out of all training data
+(`jevlet/benchmarks.py`); the gate runs a task unattended only if P(safe) ≥ 0.9. CPU latency
+is ~40 ms for three questions in one pass. Details and caveats: `research/lab-notebook.md`.
 
 ## Quick start
 
@@ -133,8 +135,8 @@ Laptop (on mains power):
 
 ```powershell
 python -m scripts.train --config configs/pretrained_daily_v3.json --run-dir results/runs/jevlet-p-daily-v3
-python -m scripts.eval_daily --checkpoint results/runs/jevlet-p-daily-v3/best.pt
-python -m scripts.export_checkpoint results/runs/jevlet-p-daily-v3/best.pt data/daily/current.pt --fp16
+python -m scripts.calibrate results/runs/jevlet-p-daily-v3/best.pt results/runs/jevlet-p-daily-v3/calibrated.pt --data data/daily/dev.jsonl --data data/teacher/dev.jsonl --fp16
+python -m scripts.eval_daily --checkpoint results/runs/jevlet-p-daily-v3/calibrated.pt
 ```
 
 Runs save a resumable `last.pt` (model, optimizer, scaler, RNG, sampler) and resume with

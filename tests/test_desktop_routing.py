@@ -21,13 +21,15 @@ class FakeRouter:
 
 class FakeSystemOne:
     calibrated = True
+    risk = 0.8
 
     def evaluate(self, state, questions):
         assert set(questions) == {"route", "risk"}
         names = tuple(questions["route"].criteria)
+        risky = self.risk >= 0.5
         return {
             "route": Choice(names, (0.99, 0.01), names[0], 0.99),
-            "risk": Noul(0.8, 0.2, None, True, 0.8),
+            "risk": Noul(self.risk, 1 - self.risk, None, risky, max(self.risk, 1 - self.risk)),
         }
 
     def gate(self, confidence):
@@ -51,9 +53,12 @@ def test_desktop_suggestion_and_corrected_feedback_reach_training_store(tmp_path
         session.rate(1, None)
 
 
-def test_risky_task_never_auto_executes_even_at_high_route_confidence(tmp_path) -> None:
-    session = DesktopRoutingSession(FakeSystemOne(), FeedbackStore(tmp_path / "f.sqlite3"))
+@pytest.mark.parametrize(("risk", "gate"), [(0.8, "verify"), (0.2, "verify"), (0.05, "execute")])
+def test_execution_needs_ninety_percent_confidence_that_task_is_safe(tmp_path, risk, gate):
+    router = FakeSystemOne()
+    router.risk = risk
+    session = DesktopRoutingSession(router, FeedbackStore(tmp_path / "f.sqlite3"))
     context = DesktopContext(WindowInfo(7, "Bank portal", 1), ())
     decision = session.suggest("Wire the deposit", context, ("Local", "Human"))
-    assert decision.risk == pytest.approx(0.8)
-    assert decision.gate == "verify"
+    assert decision.risk == pytest.approx(risk)
+    assert decision.gate == gate

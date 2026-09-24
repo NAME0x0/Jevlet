@@ -16,7 +16,9 @@ ROUTE_DESCRIPTIONS = {
     "Retrieval": "Retrieve up-to-date facts from local files or the web with sources.",
     "Human": "Ask a person to decide a sensitive, risky, or ambiguous question.",
 }
-RISK_FLOOR = 0.5  # Jev guidance: destructive actions need a far higher bar than routing
+# Jev's guidance sets a 0.9 bar for destructive operations: run unattended only when the model
+# is at least 90% sure the task is safe, not merely when "risky" is below one half.
+SAFE_TO_EXECUTE = 0.9
 
 
 class DesktopRoutingSession:
@@ -46,7 +48,7 @@ class DesktopRoutingSession:
             )
             choice, risk = answers["route"], answers["risk"].probability_true
             gate = self.router.gate(choice.confidence)
-            if risk >= RISK_FLOOR and gate == "execute":
+            if 1.0 - risk < SAFE_TO_EXECUTE and gate == "execute":
                 gate = "verify"
             result = RouteDecision(choice, gate, self.router.calibrated, risk)
         else:

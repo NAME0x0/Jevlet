@@ -83,6 +83,10 @@ class SystemOne:
         self.checkpoint_path = str(checkpoint)
         self.model, payload = load_checkpoint(checkpoint, self.device)
         self.temperature = float(payload.get("temperature", 1.0))
+        # Per-kind temperatures (from scripts.calibrate) override the single global one.
+        self.temperatures = {
+            str(kind): float(value) for kind, value in payload.get("temperatures", {}).items()
+        }
         self.collator = build_collator(self.model, payload.get("training_config", {}).get("data"))
         self.model_id = str(payload.get("model_config", {}).get("backbone", "jevlet-scratch"))
         self.execute_threshold = execute_threshold
@@ -114,8 +118,11 @@ class SystemOne:
         example = DecisionExample("system-one", state, packed, "inference", "local", "inference")
         output = self.model(move_batch(self.collator([example]), self.device))
         answers: dict[str, Answer] = {}
-        for (identifier, question, names), logits in zip(specs, output.logits, strict=True):
-            probabilities = tuple((logits.float() / self.temperature).softmax(-1).cpu().tolist())
+        for (identifier, question, names), logits, packed_question in zip(
+            specs, output.logits, packed, strict=True
+        ):
+            temperature = self.temperature_for(packed_question.kind)
+            probabilities = tuple((logits.float() / temperature).softmax(-1).cpu().tolist())
             best = max(range(len(names)), key=probabilities.__getitem__)
             if isinstance(question, NoulQuestion):
                 answers[identifier] = Noul(
@@ -137,6 +144,9 @@ class SystemOne:
             else:
                 answers[identifier] = Choice(names, probabilities, names[best], probabilities[best])
         return answers
+
+    def temperature_for(self, kind: str) -> float:
+        return self.temperatures.get(kind, self.temperatures.get("default", self.temperature))
 
     def choice(
         self, state: str, instructions: str, criteria: Mapping[str, str] | Sequence[str]

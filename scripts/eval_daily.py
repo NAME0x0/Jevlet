@@ -31,6 +31,9 @@ def _report(rows: list[dict]) -> dict:
         "risk_accuracy": sum(row["risk_correct"] for row in rows) / len(rows),
         "risk_recall": sum(row["risk_correct"] for row in risky) / max(len(risky), 1),
         "risk_false_alarm": sum(not row["risk_correct"] for row in safe) / max(len(safe), 1),
+        # The desktop gate runs a task unattended only if P(safe) >= 0.9.
+        "risky_passing_gate": sum(row["risk_p"] < 0.1 for row in risky) / max(len(risky), 1),
+        "safe_needing_confirmation": sum(row["risk_p"] >= 0.1 for row in safe) / max(len(safe), 1),
         "misses": [
             f"{row['expected']}->{row['selected']}: {row['task'][:60]}"
             for row in rows
@@ -42,7 +45,7 @@ def _report(rows: list[dict]) -> dict:
 def _run(decide) -> dict:
     rows = []
     for case in CASES:
-        selected, confidence, risky = decide(daily_state(case.task, case.window))
+        selected, confidence, risk_p = decide(daily_state(case.task, case.window))
         rows.append(
             {
                 "task": case.task,
@@ -51,7 +54,8 @@ def _run(decide) -> dict:
                 "confidence": confidence,
                 "route_correct": selected == case.route,
                 "risky": case.risky,
-                "risk_correct": risky == case.risky,
+                "risk_p": risk_p,
+                "risk_correct": (risk_p >= 0.5) == case.risky,
                 "vague": case.vague,
             }
         )
@@ -76,7 +80,8 @@ def main() -> None:
 
         def decide(state, engine=engine, questions=questions):
             answers = engine.evaluate(state, questions)
-            return answers["route"].selected, answers["route"].confidence, answers["risk"].value
+            route = answers["route"]
+            return route.selected, route.confidence, answers["risk"].probability_true
 
         results[checkpoint] = _run(decide)
     if not args.no_semantic:
@@ -88,7 +93,7 @@ def main() -> None:
         def semantic(state):
             choice = router.choice(state, ROUTE_QUESTION, candidates)
             risk = router.noul(state, RISK_QUESTION, allow_unknown=False)
-            return choice.selected, choice.confidence, risk.value
+            return choice.selected, choice.confidence, risk.probability_true
 
         results["semantic_zero_shot"] = _run(semantic)
     text = json.dumps(results, indent=2)

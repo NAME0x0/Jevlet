@@ -51,7 +51,49 @@ Readings (exploratory, single seed):
 resuming `results/runs/research-p1` now would skip the finals; rerun the finals in a new
 output directory or on Colab. The daily v2 training was stopped before its first checkpoint.
 
+## 2026-09-24 — daily data, teacher labels, grounding, per-kind calibration
+
+**Route/risk data transfers.** v2 (mixture v2: + compositional daily data, MASSIVE, CLINC;
+5,000 steps, 16 min) takes the held-out 78-task benchmark from 30.8% to 91.0% route accuracy
+and escalates all vague requests. v3 adds the ~220-task teacher corpus (soft route and risk
+probabilities) and 15k screen-grounding rows. The teacher corpus was written before any v2
+benchmark errors were inspected, and no data was added in response to them.
+
+| Held-out benchmark | Route acc. | Route ECE | Risky tasks passing the P(safe) ≥ 0.9 gate | Safe tasks needing confirmation |
+|---|---|---|---|---|
+| zero-shot router | 44.9% | 0.081 | — | — |
+| v2, global temperature | 91.0% | 0.071 | — | — |
+| v3, global temperature (T=3.05) | 92.3% | 0.157 (underconfident) | — | — |
+| v2, per-kind temperatures | 91.0% | 0.061 | 1 / 11 | 0% |
+| **v3, per-kind temperatures** | **92.3%** | **0.062** | **0 / 11** | 3% |
+
+**A single temperature is the wrong calibration unit.** Fitted on the mixed v3 dev set, one
+temperature (3.05) made the daily driver underconfident. Temperatures per question kind,
+fitted on deployment-like data (daily generator dev + teacher dev, never the benchmark),
+restore ECE to 0.06. Promoted: v3 per-kind calibrated → `data/daily/current.pt` (v2 kept as
+`previous.pt`).
+
+**Remaining benchmark misses are lexical traps and unseen risk types**: "image resize"
+(code) → Gemini, "take a screenshot" → Gemini, force-push and drive formatting not flagged
+risky at 0.5 (both still blocked by the 0.9 safe gate). n = 78 and 11 risky cases: treat as
+direction, not precision.
+
+**Screen grounding on unseen apps** (Teams, Spotify; never in training): the correct control
+is picked 45–56% of the time and "none of these" is right 81–89% of the time (zero-shot
+router 36% overall). It is overconfident there (ECE 0.19), so grounding stays suggest-and-confirm. Live check on
+the real Windows Terminal: 3/3 correct (Close Tab, New Tab, Minimize); UIA read ~170 ms cold,
+decision ~250 ms.
+
 ## Next
+
+1. Grounding needs more app inventories, ideally recorded from live UIA trees of the apps
+   actually used, plus demonstrations (the user performs the task; the clicked control is the
+   label).
+2. Resume the interrupted bge-small finals: `python -m scripts.run_overnight --config
+   configs/overnight_pretrained.json --output results/runs/research-p1 --extend-hours 2`.
+3. Colab: full-scale v3 recipe and the 4 h ablation search via `notebooks/jevlet_colab.ipynb`.
+
+## Earlier next steps (2026-09-23, done)
 
 1. Train daily v2: `python -m scripts.train --config configs/pretrained_daily.json --run-dir results/runs/jevlet-p-daily-v2`
    (~12 min on the A2000, on mains power), then `python -m scripts.eval_daily --checkpoint results/runs/jevlet-p-daily-v2/best.pt`.

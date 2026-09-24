@@ -21,6 +21,8 @@ def export_checkpoint(source: str | Path, destination: str | Path, *, fp16: bool
         "model_config": payload["model_config"],
         "model_state": state,
         "temperature": payload.get("temperature", 1.0),
+        "temperatures": payload.get("temperatures", {}),
+        "calibration": payload.get("calibration", {}),
         "metrics": payload.get("metrics", {}),
         "training_config": {"data": training.get("data", {}), "seed": training.get("seed")},
         "exported_from": str(Path(source).resolve()),

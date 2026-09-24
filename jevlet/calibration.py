@@ -47,3 +47,26 @@ def fit_temperature(
 
     optimizer.step(closure)
     return float(log_temperature.detach().exp().clamp(0.05, 20.0))
+
+
+def fit_temperatures_by_kind(
+    logits_list: list[torch.Tensor], records: list[dict[str, Any]], minimum: int = 20
+) -> dict[str, float]:
+    """One temperature per question kind (choice/noul/score), known at inference time.
+
+    A single global temperature is dominated by whichever family fills the calibration set;
+    yes/no and many-option questions need different corrections. Kinds with fewer than
+    ``minimum`` rows fall back to the pooled temperature.
+    """
+    pooled = fit_temperature(logits_list, records)
+    temperatures = {"default": pooled}
+    kinds = sorted({str(record.get("kind", "choice")) for record in records})
+    for kind in kinds:
+        pairs = [
+            (logits, record)
+            for logits, record in zip(logits_list, records, strict=True)
+            if str(record.get("kind", "choice")) == kind
+        ]
+        if len(pairs) >= minimum:
+            temperatures[kind] = fit_temperature([p[0] for p in pairs], [p[1] for p in pairs])
+    return temperatures
