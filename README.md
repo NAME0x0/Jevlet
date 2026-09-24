@@ -43,7 +43,11 @@ Two backbones share this topology, training loop, metrics, and API:
 | Zero-shot MiniLM router | 44.9% | 0.081 | — | 36% |
 | Jevlet-P v1 (generic data) | 30.8% | 0.102 | — | — |
 | Jevlet-P v2 (+ daily route/risk data) | 91.0% | 0.061 | 1 / 11 | — |
-| **Jevlet-P v3 (+ teacher, grounding; per-kind calibration)** | **92.3%** | **0.062** | **0 / 11** | 45–56% control, 81–89% "none" |
+| Jevlet-P v3 (+ teacher, grounding; per-kind calibration) | 92.3% | 0.062 | 0 / 11 | 77.6% |
+| **Jevlet-P v4 (bge-small, + 40k assistant commands)** | **97.4%** | **0.056** | **0 / 11** | **82.4%** |
+
+v4 also plans assistant commands: 73.8% end-to-end on 80 held-out natural-language commands,
+0 of 7 destructive requests runnable, ~35 ms median latency on the GPU.
 
 The benchmark is 78 hand-written laptop tasks kept out of all training data
 (`jevlet/benchmarks.py`); the gate runs a task unattended only if P(safe) ≥ 0.9. CPU latency

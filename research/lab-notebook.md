@@ -84,9 +84,40 @@ router 36% overall). It is overconfident there (ECE 0.19), so grounding stays su
 the real Windows Terminal: 3/3 correct (Close Tab, New Tab, Minimize); UIA read ~170 ms cold,
 decision ~250 ms.
 
+## 2026-09-24 (afternoon) — command -> action assistant, v4
+
+v4 = bge-small (33M) on mixture v4 (v3 sources + 40k generated assistant commands over 20
+skills), 8,000 steps, 71 min on the A2000 (sharing the GPU part of the time), per-kind
+temperatures fitted on command/daily/teacher dev sets.
+
+| Benchmark (held out) | v3 | v4 |
+|---|---|---|
+| Daily route accuracy (78 tasks) | 92.3% | **97.4%** |
+| Daily risk recall (11 risky) | 73% | **91%** |
+| Risky tasks passing the P(safe) ≥ 0.9 gate | 0/11 | 0/11 |
+| Unseen-app grounding (Teams, Spotify) | 77.6% | **82.4%** |
+| Assistant commands, end to end (80, natural phrasing) | — | 73.8% |
+| Assistant: wrong plan that would run on one Enter | — | 3/80 |
+| Assistant: destructive request runnable | — | 0/7 |
+
+The mixture dev set reaches 93.2%, but held-out natural phrasing reaches 73.8%: the gap is
+coverage of how people actually talk, not training length. A step-5,500 preview scored the same
+on commands. Misses cluster in three groups:
+
+1. colloquial verbs the generator never uses ("get X going", "tuck this away", "kill the sound");
+2. symptom-to-fix requests ("my headphones won't connect" -> Bluetooth settings, "the screen
+   is too dim" -> display, which v4 turns into volume down and would run);
+3. reaching an open window through what it holds ("back to the thesis", "where's my terminal").
+
+These misses have now been seen, so benchmark v1 can no longer measure fixes for them. The next data
+round gets a fresh held-out benchmark written before the data, and v1 is reported as
+"inspected".
+
 ## Next
 
-1. Grounding needs more app inventories, ideally recorded from live UIA trees of the apps
+1. Natural-phrasing data (colloquial verbs, symptom -> setting, window-by-content) plus a new
+   held-out command benchmark written first; then v5.
+2. Grounding needs more app inventories, ideally recorded from live UIA trees of the apps
    actually used, plus demonstrations (the user performs the task; the clicked control is the
    label).
 2. Resume the interrupted bge-small finals: `python -m scripts.run_overnight --config
