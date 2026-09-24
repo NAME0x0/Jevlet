@@ -137,12 +137,26 @@ def _user32():
 
 
 def focus_window(handle: int) -> bool:
-    user32 = _user32()
+    """Foreground a window without synthesizing keys.
+
+    Tapping Alt is the common trick, but in Office it opens ribbon key tips and any text typed
+    next would trigger ribbon commands. Sharing input state with the current foreground
+    thread grants the same permission with no keystrokes.
+    """
+    user32, kernel32 = _user32(), ctypes.windll.kernel32
     if user32.IsIconic(handle):
         user32.ShowWindow(handle, 9)  # SW_RESTORE
-    # Tapping Alt releases Windows' foreground lock for this process.
-    _send([(VK["alt"], False), (VK["alt"], True)])
-    return bool(user32.SetForegroundWindow(handle))
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    foreground = user32.GetForegroundWindow()
+    ours = kernel32.GetCurrentThreadId()
+    theirs = user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+    attached = bool(theirs and theirs != ours and user32.AttachThreadInput(ours, theirs, True))
+    try:
+        user32.BringWindowToTop(wintypes.HWND(handle))
+        return bool(user32.SetForegroundWindow(handle))
+    finally:
+        if attached:
+            user32.AttachThreadInput(ours, theirs, False)
 
 
 def switch_to(handle: int, title: str, previous: int | None) -> Outcome:
