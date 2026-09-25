@@ -215,4 +215,4 @@ power limits. Train on mains power with the laptop on a hard, ventilated surface
 
 ## License
 
-Code: [MIT](LICENSE). Datasets keep their own licenses (listed in the model card); TOPv2 and BoolQ are share-alike.
+Code and model weights: [MIT](LICENSE). Datasets keep their own licenses (listed in the model card); TOPv2 and BoolQ are share-alike.

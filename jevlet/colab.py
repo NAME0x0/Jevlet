@@ -531,7 +531,7 @@ def safetensors_export(checkpoint: Path, folder: Path) -> None:
 
 
 def publish(
-    paths: Paths, repo_id: str, token: str, private: bool, github: str, license: str = "other"
+    paths: Paths, repo_id: str, token: str, private: bool, github: str, license: str = "mit"
 ) -> str:
     """Upload weights, catalogues, results, and the model card; tag the version."""
     from huggingface_hub import HfApi

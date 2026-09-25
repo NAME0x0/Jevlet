@@ -44,7 +44,7 @@ def _row(name: str, block: dict[str, Any] | None) -> str:
 
 
 def render_model_card(
-    results: dict[str, Any], *, repo_id: str, version: str, github: str, license: str = "other"
+    results: dict[str, Any], *, repo_id: str, version: str, github: str, license: str = "mit"
 ) -> str:
     final = results.get("final", {})
     vault = final.get("real_vault", {})

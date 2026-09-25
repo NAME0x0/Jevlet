@@ -128,7 +128,7 @@ def test_model_card_renders_every_section() -> None:
     card = render_model_card(
         results, repo_id="u/Jevlet", version="v6", github="https://github.com/u/Jevlet"
     )
-    assert card.startswith("---\nlanguage: en\nlicense: other")
+    assert card.startswith("---\nlanguage: en\nlicense: mit")
     for text in (
         "90.0%",
         "160,000",

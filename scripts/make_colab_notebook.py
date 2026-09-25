@@ -47,7 +47,7 @@ DRIVE_DIR = "/content/drive/MyDrive/Jevlet"
 BASE_CONFIG = "configs/pretrained_daily_v6_colab.json"
 HF_REPO_ID = ""  # empty: <your Hugging Face username>/Jevlet
 HF_PRIVATE = False
-MODEL_LICENSE = "other"  # license field of the model card; set it to the license you choose
+MODEL_LICENSE = "mit"  # license field of the model card (the repository is MIT too)
 PUBLISH = True
 ALLOW_CODE_UPDATE = False  # True: a resumed run picks up newer code from the branch""",
     ),
