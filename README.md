@@ -212,3 +212,7 @@ deadline. Results stay exploratory until finalists repeat across seeds.
 
 Training uses FP16, a GPU memory cap, and saves progress periodically. Jevlet does not change
 power limits. Train on mains power with the laptop on a hard, ventilated surface.
+
+## License
+
+Code: [MIT](LICENSE). Datasets keep their own licenses (listed in the model card); TOPv2 and BoolQ are share-alike.

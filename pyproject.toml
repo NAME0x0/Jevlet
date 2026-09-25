@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "jevlet"
 version = "0.1.0"
 description = "Tiny Jev-inspired calibrated decision-model research platform"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["torch>=2.3"]
 
 [project.optional-dependencies]
