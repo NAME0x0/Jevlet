@@ -99,14 +99,21 @@ def test_branch_positions_restart_after_state(model) -> None:
         assert int(positions[branches == branch].min()) == state_len
 
 
-def test_position_budget_is_enforced() -> None:
-    config = PretrainedConfig(max_state_tokens=500, max_question_tokens=64)
+def test_position_budget_truncates_state_then_enforces() -> None:
+    config = PretrainedConfig(max_state_tokens=500, max_question_tokens=64, max_packed_len=2048)
     small = PretrainedJevlet(config, load_weights=False)
-    example = DecisionExample(
+    collator = small.make_collator()
+    # A long state is cut just enough for its longest branch to fit the position limit.
+    long_state = DecisionExample(
         "long", "word " * 600, [Question("pick " * 40, ["a", "b"], 0)], "t", "t", "dev"
     )
+    batch = collator([long_state])
+    assert int(batch["position_ids"].max()) == collator.max_position - 1
+    # A branch that cannot fit even with an empty state still fails loudly.
+    options = [f"option number {i} " * 3 for i in range(60)]
+    too_wide = DecisionExample("wide", "hi", [Question("pick", options, 0)], "t", "t", "dev")
     with pytest.raises(ValueError, match="position"):
-        small.make_collator()([example])
+        collator([too_wide])
 
 
 def test_pretrained_training_checkpoint_round_trip(tmp_path) -> None:

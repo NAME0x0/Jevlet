@@ -7,21 +7,32 @@ import json
 import statistics
 from collections import defaultdict
 
-from jevlet.assistant.benchmark import CASES, DESKTOP, benchmark_apps
+from jevlet.assistant import benchmark, benchmark_v2
 from jevlet.assistant.environment import installed_apps
 from jevlet.assistant.planner import Context, Planner
 from jevlet.system_one import SystemOne
 
 
+def _context(version: str) -> tuple[tuple, Context]:
+    apps = benchmark.benchmark_apps(installed_apps())
+    if version == "v1":
+        return benchmark.CASES, Context(benchmark.DESKTOP[0], benchmark.DESKTOP, apps)
+    desk = benchmark_v2
+    context = Context(desk.DESKTOP[0], desk.DESKTOP, apps, desk.EVENTS, desk.ALARMS, desk.TODOS)
+    context.files, context.reminders = list(desk.FILES), list(desk.REMINDERS)
+    return desk.CASES, context
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint")
+    parser.add_argument("--benchmark", choices=("v1", "v2"), default="v2")
     parser.add_argument("--output")
     args = parser.parse_args()
     planner = Planner(SystemOne(args.checkpoint))
-    context = Context(DESKTOP[0], DESKTOP, benchmark_apps(installed_apps()))
+    cases, context = _context(args.benchmark)
     rows, latencies = [], []
-    for case in CASES:
+    for case in cases:
         plan = planner.plan(case.command, context)
         latencies.append(plan.latency_ms)
         skill_ok = plan.skill.key == case.skill

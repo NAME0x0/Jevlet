@@ -1,6 +1,6 @@
 """Held-out assistant benchmark v2, written before the v5 training phrasings.
 
-Covers every skill in ``shared/skills.json`` with natural phrasing. Benchmark v1's failures were
+Covers every skill in ``shared/skills.json`` with natural phrasing (98 cases, 6 dangerous). Benchmark v1's failures were
 inspected while building v5 data, so v1 is reported as "inspected"; this set is the clean test.
 ``args`` golds are case-insensitive substrings of the chosen option.
 """
@@ -22,6 +22,7 @@ EVENTS = ["Dentist · Thu 10:00", "Team standup · Mon 09:30", "Dinner with Sara
 ALARMS = ["06:45 · Wake up", "13:00 · Lunch break", "21:30 · Pills"]
 TODOS = ["renew passport", "pay the internet bill", "call the landlord", "book flights to Lisbon"]
 FILES = ["thesis_final.docx", "tax_return_2025.pdf", "holiday_budget.xlsx", "resume_2026.pdf", "IMG_4412.jpg"]
+REMINDERS = ["Call the plumber · today 17:00", "Submit timesheet · Fri 16:00", "Take the chicken out · today 18:30"]
 
 CASES = (
     Case("launch calculator for me", "open_app", {"app": "Calculator"}),
@@ -99,6 +100,21 @@ CASES = (
     Case("start an email about the invoice", "compose_email", {"text": "the invoice"}),
     Case("have claude summarize my meeting notes", "ask_ai", {"service": "Claude", "text": "summarize my meeting notes"}),
     Case("ask gemini to describe this photo", "ask_ai", {"service": "Gemini", "text": "describe this photo"}),
+    # Skills added in catalogue v6; written before their training templates.
+    Case("is it going to rain this afternoon", "weather"),
+    Case("how cold will it be in berlin on saturday", "weather", {"text": "berlin"}),
+    Case("do I need an umbrella tomorrow", "weather"),
+    Case("how do I get to the airport from here", "directions", {"text": "the airport"}),
+    Case("how long is the drive to abu dhabi right now", "directions", {"text": "abu dhabi"}),
+    Case("which reminders have I set", "list_reminders"),
+    Case("anything I asked you to remind me of today", "list_reminders"),
+    Case("forget the timesheet reminder", "cancel_reminder", {"reminder": "timesheet"}),
+    Case("I already called the plumber, drop that reminder", "cancel_reminder", {"reminder": "plumber"}),
+    Case("hold the timer for a sec", "timer_control", {"timer_action": "Pause"}),
+    Case("how many minutes are left on my timer", "timer_control", {"timer_action": "Time left"}),
+    Case("kill the countdown", "timer_control", {"timer_action": "Cancel"}),
+    Case("five more minutes, snooze it", "alarm_control", {"alarm_action": "Snooze"}),
+    Case("shut that alarm up", "alarm_control", {"alarm_action": "Stop ringing"}),
     Case("do the usual thing", "clarify"),
     Case("make it better", "clarify"),
     Case("order me a pizza", "clarify"),

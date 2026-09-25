@@ -291,7 +291,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         torch.cuda.reset_peak_memory_stats(device)
 
     collator = build_collator(model, config["data"])
-    train_dataset = JsonlDecisionDataset(config["data"]["train"])
+    train_dataset = JsonlDecisionDataset(config["data"]["train"], lazy=True)
     dev_dataset = JsonlDecisionDataset(config["data"]["dev"])
     eval_examples = dev_dataset.examples
     eval_limit = config["evaluation"].get("max_examples")
@@ -300,7 +300,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
             raise ValueError("evaluation.max_examples must be positive")
         indices = sorted(random.Random(1729).sample(range(len(eval_examples)), int(eval_limit)))
         eval_examples = [eval_examples[index] for index in indices]
-    if not train_dataset.examples:
+    if not len(train_dataset):
         raise ValueError("training dataset is empty")
 
     def train_loader_for_epoch(epoch: int) -> DataLoader:
@@ -351,6 +351,8 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     save_every_steps = int(config["training"].get("save_every_steps", 0))
     if save_every_steps < 0:
         raise ValueError("save_every_steps must be nonnegative")
+    # Weights kept at these steps (never overwritten) for a scaling curve on held-out benchmarks.
+    keep_steps = {int(value) for value in config["training"].get("keep_steps", ())}
     optimizer.zero_grad(set_to_none=True)
     step = 0
     micro_step = 0
@@ -383,6 +385,8 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     questions_seen = 0
     tokens_seen = 0
     started = time.perf_counter()
+    first_step = step
+    log_every = int(config["training"].get("log_every_steps", 100))
     model.train()
     while step < max_steps:
         if (
@@ -428,6 +432,22 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
             step += 1
+            if log_every and step % log_every == 0:
+                elapsed = time.perf_counter() - started
+                rate = (step - first_step) / elapsed
+                progress = {
+                    "step": step,
+                    "loss": round(float(loss), 4),
+                    "lr_factor": round(factor, 4),
+                    "steps_per_second": round(rate, 3),
+                    "tokens_per_second": int(tokens_seen / elapsed),
+                    "eta_hours": round((max_steps - step) / rate / 3600, 2),
+                }
+                print(json.dumps(progress), flush=True)
+            if step in keep_steps:
+                save_checkpoint(
+                    run_path / f"step-{step}.pt", model, optimizer, config, 1.0, {"steps": step}
+                )
             if save_every_steps and step % save_every_steps == 0:
                 _save_progress(
                     run_path / "last.pt",

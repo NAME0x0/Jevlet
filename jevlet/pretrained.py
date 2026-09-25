@@ -137,8 +137,25 @@ class PretrainedCollator:
         for question in questions:
             texts.extend(question.options)
         encoded = self._encode(texts)
-        state_body = encoded[0][: self.config.max_state_tokens]
         prefix = [self.cls_id] if self.cls_id is not None else []
+        # A long option list (50 skills) leaves less room for the state under the backbone's
+        # position limit; truncate the state only as far as that branch needs.
+        cursor = 1 + len(questions)
+        extents = []
+        for local_branch, question in enumerate(questions):
+            segments = [
+                min(len(encoded[cursor + i]), self.config.max_option_tokens) or 1
+                for i in range(len(question.options))
+            ]
+            cursor += len(question.options)
+            body = min(len(encoded[1 + local_branch]), self.config.max_question_tokens)
+            if topology == "option_isolated":
+                options = max(segments) + 2
+            else:
+                options = sum(segments) + 2 * len(segments)
+            extents.append(1 + body + options + 1)
+        room = self.max_position - len(prefix) - 1 - max(extents, default=0)
+        state_body = encoded[0][: max(0, min(self.config.max_state_tokens, room))]
         token_ids = prefix + [self.state_id] + state_body
         state_len = len(token_ids)
         branch_ids = [STATE_BRANCH] * state_len

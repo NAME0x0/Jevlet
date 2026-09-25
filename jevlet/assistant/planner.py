@@ -54,6 +54,7 @@ class Context:
     alarms: list[str] = field(default_factory=list)
     todos: list[str] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
+    reminders: list[str] = field(default_factory=list)
 
     @classmethod
     def capture(cls, exclude_handles: tuple[int, ...] = ()) -> Context:
@@ -71,6 +72,7 @@ class Context:
             alarms=list(self.alarms),
             todos=list(self.todos),
             files=list(self.files),
+            reminders=list(self.reminders),
         )
 
 
@@ -157,7 +159,8 @@ class Planner:
         first = self.engine.evaluate(
             state,
             {
-                "skill": ChoiceQuestion(SKILL_QUESTION, {s.name: s.description for s in SKILLS}),
+                # Names only, as in training: descriptions would overflow 512 positions.
+                "skill": ChoiceQuestion(SKILL_QUESTION, [s.name for s in SKILLS]),
                 "risk": NoulQuestion(RISK_QUESTION),
             },
         )

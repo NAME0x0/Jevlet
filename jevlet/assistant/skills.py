@@ -35,8 +35,11 @@ THEMES = tuple(CATALOGUES["theme"])
 SERVICES = tuple(CATALOGUES["service"])
 FIXED_CHOICES = {
     name: tuple(CATALOGUES[name])
-    for name in ("media", "volume", "theme", "service", "power", "radio", "brightness", "stopwatch")
-}
+    for name in (
+        "media", "volume", "theme", "service", "power", "radio", "brightness", "stopwatch",
+        "timer_action", "alarm_action",
+    )
+}  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +86,7 @@ class Environment:
     alarms: list[str] = field(default_factory=list)  # "07:30 · label"
     todos: list[str] = field(default_factory=list)
     files: list[str] = field(default_factory=list)  # file names from a search
+    reminders: list[str] = field(default_factory=list)  # "task · when"
 
 
 def window_label(process: str, title: str) -> str:
@@ -98,8 +102,14 @@ def slot_options(slot: str, command: str, env: Environment) -> list[str]:
         others = [window for window in env.windows if window != env.current_window]
         options = [f"Current window ({env.current_window})"] if env.current_window else []
         options += shortlist(command, others, 7)
-    elif slot in {"event", "alarm", "todo", "file"}:
-        pool = {"event": env.events, "alarm": env.alarms, "todo": env.todos, "file": env.files}
+    elif slot in {"event", "alarm", "todo", "file", "reminder"}:
+        pool = {
+            "event": env.events,
+            "alarm": env.alarms,
+            "todo": env.todos,
+            "file": env.files,
+            "reminder": env.reminders,
+        }
         options = shortlist(command, pool[slot], 8)
     # Short fixed catalogues are offered whole: "pair my headphones" shares no words with
     # "Bluetooth and devices", so a lexical shortlist would drop the answer.
@@ -108,7 +118,7 @@ def slot_options(slot: str, command: str, env: Environment) -> list[str]:
     elif slot in FIXED_CHOICES:
         options = list(FIXED_CHOICES[slot])
     elif slot == "text":
-        options = span_candidates(command, 8)
+        options = span_candidates(command)
     else:
         raise KeyError(slot)
     unique = list(dict.fromkeys(option for option in options if option))

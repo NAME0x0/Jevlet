@@ -12,12 +12,14 @@ import hashlib
 import json
 import random
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from jevlet.benchmarks import RISK_QUESTION, daily_state
-from jevlet.data import DecisionExample, Question, write_jsonl
+from jevlet.data import DecisionExample, Question
 
-from . import commands_v5
+from . import commands_v5, decontam, lexicon
+from .augment import augment
 from .skills import (
     MEDIA_ACTIONS,
     NOT_APPLICABLE,
@@ -84,9 +86,15 @@ WINDOW_POOL = (
     ("ChatGPT", "ChatGPT", ("chatgpt",)),
     ("Zoom", "Zoom Meeting", ("zoom", "the meeting")),
 )  # fmt: skip
-TOPICS = ("Flights to London", "RTX A2000 drivers", "YouTube", "Pull request #88", "Gmail")
-FILES = ("training.py", "README.md", "planner.py", "app.tsx")
-DOCS = ("thesis_draft", "budget", "notes", "cover_letter", "Q3 report")
+TOPICS = (
+    "Flights to London", "RTX A2000 drivers", "YouTube", "Pull request #88", "Gmail", "Amazon.ae", "BBC News",
+    "Weather forecast", "Stack Overflow", "Booking.com", "Google Docs", "Netflix", "Wikipedia", "LinkedIn",
+)  # fmt: skip
+FILES = ("training.py", "README.md", "planner.py", "app.tsx", "index.html", "main.cs", "styles.css", "config.json")
+DOCS = (
+    "thesis_draft", "budget", "notes", "cover_letter", "Q3 report", "meeting_minutes", "lesson_plan",
+    "project_plan", "grant_proposal", "novel_chapter_3", "sales_forecast", "rota", "invoice_template",
+)  # fmt: skip
 
 SETTINGS_PHRASES = {
     "Display and brightness": ("display settings", "change the screen brightness", "screen resolution settings"),
@@ -142,42 +150,6 @@ SHORTCUT_PHRASES = {
     "Emoji panel": ("open the emoji picker",), "Clipboard history": ("show my clipboard history",),
     "Next virtual desktop": ("go to the next desktop",), "Previous virtual desktop": ("go to the previous desktop",),
 }  # fmt: skip
-SEARCH_QUERIES = (
-    "cheap flights to london", "rtx a2000 driver download", "how to center a div", "best pizza near me",
-    "python asyncio tutorial", "weather in dubai tomorrow", "latest cuda toolkit", "how tall is burj khalifa",
-    "vegan lasagna recipe", "usd to aed exchange rate", "pytorch sdpa custom mask", "news about typesafe jev",
-)  # fmt: skip
-TYPE_TEXTS = (
-    "see you at 5", "thanks, sounds good", "I'll be 10 minutes late", "Happy birthday!",
-    "meeting moved to 3pm", "on my way", "can you send the file?", "omar@northwind.ae",
-)  # fmt: skip
-AI_REQUESTS = (
-    "summarize this article", "write a poem about rain", "explain quantum tunneling simply",
-    "fix the bug in my regex", "draft a reply to my landlord", "describe what's in this image",
-    "translate this paragraph to french", "outline a blog post about remote work",
-)  # fmt: skip
-CLARIFY = (
-    ("do the thing", 0.1), ("handle it", 0.1), ("you know what to do", 0.1), ("fix everything", 0.2),
-    ("delete all my photos", 0.95), ("format the external drive", 0.97), ("send 500 dollars to omar", 0.97),
-    ("buy the thing in my cart", 0.95), ("email my boss that I quit", 0.95), ("uninstall chrome", 0.8),
-    ("should I take the job offer", 0.1), ("make me a sandwich", 0.05), ("wipe my laptop", 0.98),
-    ("post this on my linkedin", 0.9), ("empty the recycle bin forever", 0.9), ("turn off the firewall", 0.95),
-)  # fmt: skip
-PREFIXES = ("", "", "", "please ", "can you ", "hey jevlet, ", "could you ", "quickly ", "I want to ")
-
-
-def _typo(rng: random.Random, text: str) -> str:
-    words = text.split()
-    candidates = [index for index, word in enumerate(words) if len(word) > 4]
-    if not candidates or rng.random() > 0.08:
-        return text
-    index = rng.choice(candidates)
-    word = words[index]
-    cut = rng.randrange(1, len(word) - 1)
-    words[index] = word[:cut] + word[cut + 1 :]
-    return " ".join(words)
-
-
 def _environment(rng: random.Random, local_apps: tuple[str, ...]) -> tuple[Environment, dict]:
     pool = list(dict.fromkeys(APP_POOL + local_apps))
     apps = sorted(rng.sample(pool, min(len(pool), rng.randint(40, 90))), key=str.casefold)
@@ -191,7 +163,9 @@ def _environment(rng: random.Random, local_apps: tuple[str, ...]) -> tuple[Envir
         content = doc.replace("_", " ") if "{doc}" in title or "{book}" in title else ""
         labels[label] = phrases + ((f"the {content}", f"my {content}") if content else ())
     stores = commands_v5.fill_stores(rng)
-    env = Environment(apps, windows, windows[0], stores["events"], stores["alarms"], stores["todos"], stores["files"])
+    env = Environment(
+        apps, windows, windows[0], stores["events"], stores["alarms"], stores["todos"], stores["files"], stores["reminders"]
+    )
     return env, labels
 
 
@@ -205,35 +179,35 @@ def _command(rng: random.Random, skill: str, env: Environment, windows: dict) ->
         name = rng.choice(APP_ALIASES.get(app, (app.lower(), app)))
         if rng.random() < 0.3:
             return commands_v5.extra_open_app(rng, name), {"app": app}, 0.02
-        verb = rng.choice(("open", "launch", "start", "fire up", "run", "bring up", "open up"))
+        verb = rng.choice(("open", "launch", "start", "fire up", "run", "bring up", "open up", "boot up", "pull up", "get", "execute", "load"))
         return f"{verb} {name}", {"app": app}, 0.02
     if skill in {"switch_window", "close_window", "minimize_window", "maximize_window"}:
         use_current = rng.random() < 0.35
         target = env.current_window if use_current else rng.choice(env.windows)
         name = rng.choice(("this", "this window", "it", "the current window")) if use_current else rng.choice(windows[target])
         verb = {
-            "switch_window": ("switch to", "go to", "bring up", "show me", "jump to"),
-            "close_window": ("close", "quit", "exit", "shut"),
-            "minimize_window": ("minimize", "hide", "shrink"),
-            "maximize_window": ("maximize", "make fullscreen", "enlarge"),
-        }[skill]
+            "switch_window": ("switch to", "go to", "bring up", "show me", "jump to", "focus", "back to", "flip to", "take me back to", "alt tab to"),
+            "close_window": ("close", "quit", "exit", "shut", "close down", "kill", "get rid of", "x out of", "exit out of"),
+            "minimize_window": ("minimize", "hide", "shrink", "minimise", "put away", "tuck away", "collapse"),
+            "maximize_window": ("maximize", "make fullscreen", "enlarge", "maximise", "full screen", "blow up", "expand"),
+        }[skill]  # fmt: skip
         gold = f"Current window ({env.current_window})" if use_current or target == env.current_window else target
         return f"{rng.choice(verb)} {name}", {"window": gold}, 0.2 if skill == "close_window" else 0.02
     if skill == "media":
         action = rng.choice(MEDIA_ACTIONS)
         phrases = {
-            "Play or pause": ("pause the music", "play", "resume the song", "pause", "stop the music for a sec"),
-            "Next track": ("next song", "skip this track", "skip", "play the next one"),
-            "Previous track": ("previous song", "go back a track", "play the last song again"),
-        }[action]
+            "Play or pause": ("pause the music", "play", "resume the song", "pause", "stop the music for a sec", "resume playback", "hold the music", "unpause", "keep playing"),
+            "Next track": ("next song", "skip this track", "skip", "play the next one", "skip this one", "I don't like this song", "next", "skip ahead a song"),
+            "Previous track": ("previous song", "go back a track", "play the last song again", "back one song", "replay the previous track", "previous"),
+        }[action]  # fmt: skip
         return rng.choice(phrases), {"media": action}, 0.01
     if skill == "volume":
         action = rng.choice(VOLUME_ACTIONS)
         phrases = {
-            "Volume up": ("turn it up", "louder", "volume up", "increase the volume", "I can't hear it"),
-            "Volume down": ("turn it down", "quieter", "lower the volume", "too loud"),
-            "Mute or unmute": ("mute", "unmute", "mute the sound", "silence the laptop"),
-        }[action]
+            "Volume up": ("turn it up", "louder", "volume up", "increase the volume", "I can't hear it", "pump up the volume", "a bit louder", "raise the sound", "sound up"),
+            "Volume down": ("turn it down", "quieter", "lower the volume", "too loud", "volume down", "a bit quieter", "reduce the sound", "tone it down"),
+            "Mute or unmute": ("mute", "unmute", "mute the sound", "silence the laptop", "mute audio", "kill the sound", "turn the sound back on", "no sound"),
+        }[action]  # fmt: skip
         return rng.choice(phrases), {"volume": action}, 0.01
     if skill == "settings":
         if rng.random() < 0.35:
@@ -248,8 +222,11 @@ def _command(rng: random.Random, skill: str, env: Environment, windows: dict) ->
         phrase = rng.choice((f"turn on {word} mode", f"switch to {word} theme", f"make everything {word}", f"{word} mode"))
         return phrase, {"theme": mode}, 0.02
     if skill == "search":
-        query = rng.choice(SEARCH_QUERIES)
-        template = rng.choice(("search for {q}", "google {q}", "look up {q}", "search the web for {q}", "{q}", "find {q} online"))
+        query = lexicon.search_query(rng)
+        template = rng.choice((
+            "search for {q}", "google {q}", "look up {q}", "search the web for {q}", "{q}", "find {q} online",
+            "bing {q}", "search {q}", "web search {q}", "can you google {q}", "find out {q}", "search online for {q}",
+        ))  # fmt: skip
         return template.format(q=query), {"text": query}, 0.01
     if skill == "website":
         site = rng.choice(list(WEBSITE_PHRASES))
@@ -260,8 +237,13 @@ def _command(rng: random.Random, skill: str, env: Environment, windows: dict) ->
         phrase = rng.choice(FOLDER_PHRASES[folder])
         return f"{rng.choice(('open', 'show me', 'go to'))} {phrase}", {"folder": folder}, 0.03
     if skill == "type":
-        text = rng.choice(TYPE_TEXTS)
-        template = rng.choice(('type "{t}"', "type {t}", 'write "{t}" here', "enter {t}", 'type out "{t}"'))
+        text = lexicon.type_text(rng)
+        template = rng.choice((
+            'type "{t}"', "type {t}", 'write "{t}" here', "enter {t}", 'type out "{t}"', 'reply with "{t}"',
+            "type in {t}", 'fill in "{t}"', "write {t}", 'put "{t}" in the box', "say {t}",
+        ))  # fmt: skip
+        if '"' not in template:
+            text = text.rstrip("?!.")  # unquoted terminal punctuation is not part of the argument
         return template.format(t=text), {"text": text}, 0.2
     if skill == "shortcut":
         name = rng.choice(list(SHORTCUT_PHRASES))
@@ -271,34 +253,65 @@ def _command(rng: random.Random, skill: str, env: Environment, windows: dict) ->
         risk = 0.8 if target in {"send", "submit"} else 0.08
         return f"{rng.choice(('click', 'press', 'hit', 'tap'))} {target} {rng.choice(('button', '', 'on screen'))}".strip(), {}, risk
     if skill == "timer":
-        amount = rng.choice(("25 minutes", "an hour", "10 min", "90 seconds", "5 minutes", "half an hour", "2 hours"))
-        return rng.choice((f"set a timer for {amount}", f"remind me in {amount}", f"countdown {amount}", f"timer {amount}")), {}, 0.01
+        amount = rng.choice((
+            "25 minutes", "an hour", "10 min", "90 seconds", "5 minutes", "half an hour", "2 hours",
+            f"{rng.randint(1, 59)} minutes", f"{rng.randint(1, 12)} mins", f"{rng.randint(10, 90)} seconds",
+            f"{rng.randint(1, 3)} hours", "an hour and a half", f"{rng.randint(1, 5)} hours and {rng.randint(5, 55)} minutes",
+        ))  # fmt: skip
+        return rng.choice((
+            f"set a timer for {amount}", f"countdown {amount}", f"timer {amount}", f"{amount} timer",
+            f"start a {amount} countdown", f"time me for {amount}", f"set a {amount} timer", f"let me know when {amount} is up",
+            f"timer for {amount} please", f"start a timer, {amount}",
+        )), {}, 0.01  # fmt: skip
     if skill == "screenshot":
         return rng.choice(("take a screenshot", "screenshot this", "capture my screen", "save a picture of my screen")), {}, 0.05
     if skill == "lock":
         return rng.choice(("lock my computer", "lock the screen", "lock the laptop", "I'm stepping away, lock it")), {}, 0.05
     if skill == "ask_ai":
         service = rng.choice(SERVICES)
-        request = rng.choice(AI_REQUESTS)
-        template = rng.choice(("ask {s} to {r}", "have {s} {r}", "use {s} to {r}", "{s}, {r}", "get {s} to {r}"))
+        request = lexicon.ai_request(rng)
+        template = rng.choice((
+            "ask {s} to {r}", "have {s} {r}", "use {s} to {r}", "{s}, {r}", "get {s} to {r}", "let {s} {r}",
+            "tell {s} to {r}", "{s} please {r}", "open {s} and {r}",
+        ))  # fmt: skip
         return template.format(s=service.lower() if rng.random() < 0.5 else service, r=request), {"service": service, "text": request}, 0.05
-    phrase, risk = rng.choice(CLARIFY)
+    phrase, risk = lexicon.clarify_request(rng)
     return phrase, {}, risk
 
 
+def _golds_offered(command: str, gold: dict[str, str], env: Environment) -> bool:
+    return all(value in slot_options(slot, command, env) for slot, value in gold.items())
+
+
+def _surface(rng: random.Random, command: str, gold: dict[str, str], env: Environment, stats: Counter) -> tuple[str, dict[str, str]]:
+    """Vary how the command is typed; keep the plain form if a variation would hide a gold."""
+    for _ in range(3):
+        varied, text = augment(command, gold.get("text", ""), rng)
+        varied_gold = {**gold, "text": text} if "text" in gold else dict(gold)
+        if varied and (not gold.get("text") or text) and _golds_offered(varied, varied_gold, env):
+            stats["surface_varied"] += 1
+            return varied, varied_gold
+    stats["surface_plain"] += 1
+    return command, gold
+
+
 def _example(rng: random.Random, index: int, split: str, local_apps: tuple[str, ...], stats: Counter) -> DecisionExample:
-    env, windows = _environment(rng, local_apps)
-    skill_key = rng.choice([skill.key for skill in SKILLS])
-    command, gold, risk = _command(rng, skill_key, env, windows)
-    noisy = _typo(rng, rng.choice(PREFIXES) + command)
-    # A typo inside text the user wants typed or searched would change the argument itself.
-    command = noisy if gold.get("text", "") in noisy else rng.choice(PREFIXES) + command
+    while True:
+        env, windows = _environment(rng, local_apps)
+        skill_key = rng.choice([skill.key for skill in SKILLS])
+        command, gold, risk = _command(rng, skill_key, env, windows)
+        command, gold = _surface(rng, command, gold, env, stats)
+        hit = decontam.closest_case(command)
+        if hit is None:
+            break
+        stats[f"decontaminated:{decontam.CASES[hit].skill}"] += 1
     skills = list(SKILLS)
     if rng.random() < 0.5:
         rng.shuffle(skills)
     names = [skill.name for skill in skills]
     questions = [
-        Question(SKILL_QUESTION, [f"{s.name}: {s.description}" for s in skills], names.index(SKILL_BY_KEY[skill_key].name)),
+        # Names only: 50 "name: description" options would need 826 positions, past BERT's 512.
+        Question(SKILL_QUESTION, names, names.index(SKILL_BY_KEY[skill_key].name)),
         Question(RISK_QUESTION, ["True", "False"], 0 if risk >= 0.5 else 1, "noul", [risk, 1 - risk]),
     ]
     skill = SKILL_BY_KEY[skill_key]
@@ -326,20 +339,43 @@ def _example(rng: random.Random, index: int, split: str, local_apps: tuple[str, 
     )
 
 
+SHARD_SIZE = 5_000  # fixed, so output does not depend on how many worker processes run
+
+
+def _shard(args: tuple[int, str, int, int, tuple[str, ...]]) -> tuple[list[str], Counter]:
+    seed, split, start, count, local_apps = args
+    rng = random.Random(f"{seed}:{split}:{start}")
+    stats: Counter = Counter()
+    lines = [
+        json.dumps(_example(rng, index, split, local_apps, stats).to_dict(), sort_keys=True) + "\n"
+        for index in range(start, start + count)
+    ]
+    return lines, stats
+
+
 def generate_command_dataset(
     output_dir: str | Path,
     counts: tuple[int, int] = (40_000, 3_000),
     seed: int = 777,
     local_apps: tuple[str, ...] = (),
+    workers: int = 1,
 ) -> dict:
     root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
     manifest: dict = {"seed": seed, "local_apps": len(local_apps), "splits": {}}
-    for offset, (split, count) in enumerate(zip(("train", "dev"), counts, strict=True)):
-        rng = random.Random(seed + 7919 * offset)
+    for split, count in zip(("train", "dev"), counts, strict=True):
+        jobs = [(seed, split, start, min(SHARD_SIZE, count - start), local_apps) for start in range(0, count, SHARD_SIZE)]
+        if workers > 1:
+            with ProcessPoolExecutor(workers) as pool:
+                results = list(pool.map(_shard, jobs))
+        else:
+            results = [_shard(job) for job in jobs]
         stats: Counter = Counter()
-        examples = [_example(rng, index, split, local_apps, stats) for index in range(count)]
         path = root / f"{split}.jsonl"
-        write_jsonl(path, examples)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            for lines, shard_stats in results:
+                handle.writelines(lines)
+                stats.update(shard_stats)
         manifest["splits"][split] = {
             "count": count,
             "stats": dict(sorted(stats.items())),

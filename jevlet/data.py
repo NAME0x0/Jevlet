@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from array import array
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -51,16 +52,43 @@ class DecisionExample:
 
 
 class JsonlDecisionDataset(Dataset[DecisionExample]):
-    def __init__(self, path: str | Path) -> None:
+    """Eager by default. ``lazy=True`` keeps only line offsets and parses rows on access, so a
+    million-row mixture costs megabytes of RAM instead of tens of gigabytes."""
+
+    def __init__(self, path: str | Path, lazy: bool = False) -> None:
         self.path = Path(path)
-        with self.path.open("r", encoding="utf-8") as handle:
-            self.examples = [DecisionExample.from_dict(json.loads(line)) for line in handle if line]
+        self.lazy = lazy
+        self._handle = None
+        if not lazy:
+            with self.path.open("r", encoding="utf-8") as handle:
+                self.examples = [
+                    DecisionExample.from_dict(json.loads(line)) for line in handle if line.strip()
+                ]
+            return
+        self.offsets = array("q")
+        with self.path.open("rb") as handle:
+            position = 0
+            for line in handle:
+                if line.strip():
+                    self.offsets.append(position)
+                position += len(line)
 
     def __len__(self) -> int:
-        return len(self.examples)
+        return len(self.offsets) if self.lazy else len(self.examples)
 
     def __getitem__(self, index: int) -> DecisionExample:
-        return self.examples[index]
+        if not self.lazy:
+            return self.examples[index]
+        if self._handle is None:
+            self._handle = self.path.open("rb")
+        self._handle.seek(self.offsets[index])
+        return DecisionExample.from_dict(json.loads(self._handle.readline()))
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Open file handles do not pickle; each worker reopens its own.
+        state = dict(self.__dict__)
+        state["_handle"] = None
+        return state
 
 
 def write_jsonl(path: str | Path, examples: Iterable[DecisionExample]) -> None:

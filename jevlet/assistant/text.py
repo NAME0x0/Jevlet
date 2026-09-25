@@ -9,8 +9,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 
 ALIASES = {
     "music": ("spotify", "media player", "groove", "apple music"),
@@ -61,21 +63,16 @@ NUMBER_WORDS = {
     "ten": 10, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40, "forty-five": 45,
     "half": 0.5, "quarter": 0.25,
 }  # fmt: skip
-TRIGGERS = (
-    "search the web for", "search for", "look up", "google", "search", "find",
-    "type out", "type in", "type", "write", "say", "enter", "reply with", "named", "called",
-    "titled", "remind me to", "remind me about", "reminder to", "forget to", "task", "todo",
-    "remember that", "jot down that",
-    "jot down", "write down that", "note that", "note", "add", "put", "schedule", "book", "i have",
-    "play", "email about", "about", "how much is", "work out", "calculate", "for", "in",
-)  # fmt: skip
-# A span is also offered cut at the first of these, so "lunch with omar next tuesday at 1"
-# yields "lunch with omar". The C# port uses the same lists in the same order.
-STOPS = (
-    " and then ", " then ", " in ", " on ", " at ", " into ", " using ", " online", " for me",
-    " please", " here", " right now", " quickly", " to my ", " tomorrow", " today", " tonight",
-    " next ", " this ", " every ", " by ", ", add",
-)  # fmt: skip
+# Span rules live in shared/text_rules.json so the C# app applies the same lists in the same
+# order. A span is also offered cut at the first of each stop, so "lunch with omar next
+# tuesday at 1" yields "lunch with omar".
+RULES = json.loads(
+    (Path(__file__).resolve().parents[2] / "shared" / "text_rules.json").read_text(encoding="utf-8")
+)
+TRIGGERS: tuple[str, ...] = tuple(RULES["triggers"])
+TRIGGER_PATTERNS = tuple(re.compile(rf"\b{re.escape(trigger)}\b[:,]?\s+") for trigger in TRIGGERS)
+STOPS: tuple[str, ...] = tuple(RULES["stops"])
+LABEL_BEFORE_NOUN = re.compile(RULES["label_before_noun"], re.I)
 
 
 def words(text: str) -> list[str]:
@@ -113,16 +110,17 @@ def shortlist(query: str, names: Iterable[str], limit: int = 8) -> list[str]:
     return [name for _, _, name in scored[:limit]]
 
 
-COURTESY = re.compile(
-    r"^(?:(?:hey|hi|ok|okay)\s+jevlet[,:]?\s*|jevlet[,:]\s*|please\s+|can you\s+|could you\s+|"
-    r"would you\s+|i want to\s+|i need to\s+|i'd like to\s+|quickly\s+|just\s+)+",
-    re.I,
-)
-DELEGATE = re.compile(r"\b(?:ask|have|get|let|use|tell|make)\s+\w+(?:\s+to)?\s+|\b\w+,\s+", re.I)
+COURTESY = re.compile(RULES["courtesy"], re.I)
+DELEGATE = re.compile(RULES["delegate"], re.I)
+TEXT_CANDIDATES: int = RULES["text_candidates"]
 
 
 def strip_courtesy(command: str) -> str:
-    """'hey jevlet, can you open X' -> 'open X' (the words that carry the request)."""
+    """'hey jevlet, can you open X' -> 'open X' (the words that carry the request).
+
+    Trailing courtesy ("thanks") is left in place and handled by span cuts instead: "type
+    thank you" must keep its argument.
+    """
     return COURTESY.sub("", command.strip()).strip()
 
 
@@ -132,17 +130,50 @@ def _with_cuts(span: str) -> list[str]:
     return cuts + [span]
 
 
-def span_candidates(command: str, limit: int = 10) -> list[str]:
+PREPOSITION = re.compile(RULES["preposition"], re.I)
+PHRASE_END = re.compile(RULES["phrase_end"], re.I)
+PROPER_RUN = re.compile(RULES["proper_run_case_sensitive"])
+
+
+def _place_phrases(text: str) -> list[str]:
+    """Short noun phrases after a preposition ("to madison square garden by 9") and runs of
+    capitalized words not at the start ("the North East England forecast")."""
+    phrases = []
+    for match in PREPOSITION.finditer(text):
+        rest = text[match.end() :]
+        end = PHRASE_END.search(rest)
+        phrase = (rest[: end.start()] if end else rest).strip()
+        if 0 < len(phrase.split()) <= 5:
+            phrases.append(phrase)
+    for match in PROPER_RUN.finditer(text):
+        run = re.sub(r"'s$", "", match.group(0).rstrip(".,'"))
+        if match.start() > 0 and run not in {"I", "I'm", "I'll", "I'd"}:
+            phrases.append(run)
+    return phrases
+
+
+def span_candidates(command: str, limit: int = TEXT_CANDIDATES) -> list[str]:
     """Plausible free-text arguments, all copied verbatim from the command."""
-    text = strip_courtesy(command).rstrip(". ")
+    # Terminal punctuation is never part of an unquoted argument ("weather in cairo?").
+    text = strip_courtesy(command).rstrip(" .?!")
     candidates: list[str] = []
     candidates += re.findall(r"[\"“']([^\"”']{1,200})[\"”']", text)
     # "ask Claude to X", "have Gemini X", "ChatGPT, X": the request follows the assistant.
     candidates += [text[match.end() :] for match in DELEGATE.finditer(text)][:2]
-    lowered = text.casefold()
-    for trigger in TRIGGERS:
-        for match in re.finditer(rf"\b{re.escape(trigger)}\b[:,]?\s+", lowered):
-            candidates += _with_cuts(text[match.end() :].strip())
+    # "new task: X", "new alarm - X", but not "11:20"
+    labelled = re.split(r":\s+|\s+-\s+", text, maxsplit=1)
+    if len(labelled) == 2:
+        candidates += _with_cuts(labelled[1].strip())
+    # "set a wakeup alarm", "create a lunch time reminder": the label sits before the noun.
+    candidates += [match.group(1) for match in LABEL_BEFORE_NOUN.finditer(text)][:2]
+    # Triggers also run on the command with its time phrases removed, so "ping me this sunday
+    # at 1 to submit the claim" still yields "submit the claim" through "me to".
+    untimed = " ".join(TIME_EXPRESSION.sub(" ", text).split())
+    for pattern in TRIGGER_PATTERNS:
+        for source in (text, untimed) if untimed != text else (text,):
+            for match in pattern.finditer(source.casefold()):
+                candidates += _with_cuts(source[match.end() :].strip())
+    candidates += _place_phrases(text)
     tokens = text.split()
     candidates += _with_cuts(text)
     if len(tokens) > 1:
@@ -158,14 +189,7 @@ def span_candidates(command: str, limit: int = 10) -> list[str]:
     return unique[:limit]
 
 
-TIME_EXPRESSION = re.compile(
-    r"\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\d{1,2}:\d{2}|at \d{1,2}\b|noon|midnight|"
-    r"tomorrow|tonight|today|this (?:morning|afternoon|evening|weekend)|"
-    r"(?:next |on |this )?(?:mon|tues|wednes|thurs|fri|satur|sun)day|next week|"
-    r"on the \d{1,2}(?:st|nd|rd|th)?|in (?:\d+|an?|two|three|half an) "
-    r"(?:minutes?|mins?|hours?|days?|weeks?))\b",
-    re.I,
-)
+TIME_EXPRESSION = re.compile(RULES["time_expression"], re.I)
 
 
 def has_time(command: str) -> bool:

@@ -143,10 +143,9 @@ def test_generated_commands_offer_their_gold_arguments(tmp_path) -> None:
         for slot, value in gold.items():
             assert value in slot_options(slot, command, env), (skill.key, command, value)
     manifest = generate_command_dataset(tmp_path, counts=(300, 30), seed=5)
-    assert (
-        sum(v for k, v in manifest["splits"]["train"]["stats"].items() if k.startswith("inserted"))
-        <= 3
-    )
+    stats = manifest["splits"]["train"]["stats"]
+    assert sum(v for k, v in stats.items() if k.startswith("inserted")) <= 3
+    assert stats["surface_varied"] > 250
     row = json.loads((tmp_path / "train.jsonl").read_text().splitlines()[0])
     skill_question = row["questions"][0]
     assert skill_question["options"][skill_question["label"]].startswith(
@@ -154,25 +153,83 @@ def test_generated_commands_offer_their_gold_arguments(tmp_path) -> None:
     )
 
 
-def test_assistant_benchmark_is_not_generatable() -> None:
-    import re
-
+def test_assistant_benchmark_is_not_generatable(tmp_path) -> None:
     # Benchmark v1 was inspected while building v5 data and is contaminated by design; the
-    # strict no-leak rule applies to v2, which was written before the v5 phrasings.
+    # strict no-leak rule applies to v2, which was written before the v5/v6 phrasings.
+    from jevlet.assistant import decontam
     from jevlet.assistant.benchmark_v2 import CASES
 
-    def tokens(text: str) -> frozenset[str]:
-        return frozenset(re.findall(r"[a-z0-9']+", text.casefold()))
+    assert all(decontam.closest_case(case.command) is not None for case in CASES)
+    assert decontam.tokens("move standup to 10") == decontam.tokens("move standup to 11")
+    generate_command_dataset(tmp_path, counts=(5000, 10), seed=11)
+    for line in (tmp_path / "train.jsonl").read_text(encoding="utf-8").splitlines():
+        assert decontam.closest_case(json.loads(line)["metadata"]["command"]) is None
 
-    rng = random.Random(0)
-    generated = set()
-    for _ in range(20000):
-        skill = rng.choice(SKILLS).key
-        generated.add(tokens(_command(rng, skill, *_environment(rng, ()))[0]))
-    for case in CASES:
-        mine = tokens(case.command)
-        closest = max(len(mine & other) / len(mine | other) for other in generated)
-        assert closest < 0.8, case.command
+
+def test_augment_keeps_the_gold_span_verbatim() -> None:
+    from jevlet.assistant.augment import augment
+
+    rng = random.Random(3)
+    for _ in range(2000):
+        command, gold = augment("remind me to call priya tomorrow at 6pm", "call priya", rng)
+        assert gold.casefold() == "call priya" and gold in command
+
+
+def test_lexicon_pools_avoid_benchmark_arguments() -> None:
+    from jevlet.assistant import lexicon
+
+    rng = random.Random(5)
+    samples = [lexicon.task(rng) for _ in range(3000)] + [
+        lexicon.event_title(rng) for _ in range(3000)
+    ]
+    samples += [lexicon.city(rng) for _ in range(500)] + [lexicon.place(rng) for _ in range(500)]
+    assert not [s for s in samples if any(word in s.casefold() for word in lexicon.BLOCKED)]
+    assert len(set(samples[:3000])) > 1000  # composed, not a short list
+
+
+def test_topv2_parse_and_mapping() -> None:
+    from jevlet.assistant.real_commands import locate, map_top, parse_top
+
+    tree = (
+        "[IN:CREATE_REMINDER Remind [SL:PERSON_REMINDED me ] to [SL:TODO call the bank ] "
+        "[SL:DATE_TIME at 7 : 30 am ] ]"
+    )
+    intent, slots = parse_top(tree)
+    assert intent == "CREATE_REMINDER" and ("TODO", ["call", "the", "bank"]) in slots
+    assert locate("wake me at 7:30am", ["7", ":", "30", "am"]) == "7:30am"
+    assert map_top("Remind me to call the bank at 7:30am", tree) == (
+        "set_reminder",
+        {"text": "call the bank"},
+        0.03,
+    )
+    stopwatch = "[IN:CREATE_TIMER start the [SL:METHOD_TIMER stopwatch ] ]"
+    assert map_top("start the stopwatch", stopwatch)[:2] == ("stopwatch", {"stopwatch": "Start"})
+    assert map_top("text mom", "[IN:SEND_MESSAGE text [SL:RECIPIENT mom ] ]")[0] == "clarify"
+
+
+def test_span_rules_cover_common_forms() -> None:
+    cases = {
+        "ping me this sunday at 11:20 to submit the expense claim": "submit the expense claim",
+        "new task: renew my library card": "renew my library card",
+        "type thank you": "thank you",
+        "seoul time": "seoul",
+        "claude please draft a complaint to the council": "draft a complaint to the council",
+        "what's the weather in cairo?": "cairo",
+    }
+    for command, gold in cases.items():
+        assert gold in span_candidates(command), (command, span_candidates(command))
+
+
+def test_sharded_generation_is_worker_independent_and_loads_lazily(tmp_path) -> None:
+    from jevlet.data import JsonlDecisionDataset
+
+    one = generate_command_dataset(tmp_path / "one", counts=(6000, 10), seed=9, workers=1)
+    two = generate_command_dataset(tmp_path / "two", counts=(6000, 10), seed=9, workers=2)
+    assert one["splits"]["train"]["sha256"] == two["splits"]["train"]["sha256"]
+    eager = JsonlDecisionDataset(tmp_path / "one" / "train.jsonl")
+    lazy = JsonlDecisionDataset(tmp_path / "one" / "train.jsonl", lazy=True)
+    assert len(lazy) == len(eager) == 6000
+    assert lazy[5999] == eager[5999] and lazy[0] == eager[0]
 
 
 @pytest.mark.parametrize("skill", [s.key for s in SKILLS])
