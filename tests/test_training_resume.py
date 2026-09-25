@@ -74,6 +74,49 @@ def test_resumed_training_matches_uninterrupted_weights(tmp_path) -> None:
         torch.testing.assert_close(resumed_state["model_state"][name], value)
 
 
+def test_resume_on_a_smaller_micro_batch_continues_at_the_same_row(tmp_path) -> None:
+    # A new Colab session can land on a smaller GPU: batch 2 x 2 replaces batch 4 x 1.
+    data_root = tmp_path / "data"
+    generate_dataset(data_root, count=48, seed=17)
+    config = _config(data_root)
+    config["training"].update(batch_size=4, max_steps=2)
+    first_dir = tmp_path / "first"
+    train_experiment(config, first_dir)
+    assert torch.load(first_dir / "last.pt", weights_only=True)["example_offset"] == 8
+
+    resumed = deepcopy(config)
+    resumed["training"].update(
+        batch_size=2, gradient_accumulation=2, max_steps=3, resume_from=str(first_dir / "last.pt")
+    )
+    train_experiment(resumed, tmp_path / "resumed")
+    state = torch.load(tmp_path / "resumed" / "last.pt", weights_only=True)
+    assert state["step"] == 3 and state["example_offset"] == 12
+
+
+def test_run_files_are_mirrored_and_snapshots_are_weights_only(tmp_path) -> None:
+    data_root = tmp_path / "data"
+    generate_dataset(data_root, count=48, seed=17)
+    config = _config(data_root)
+    mirror = tmp_path / "drive" / "run"
+    config["training"].update(
+        max_steps=3, keep_steps=[2], log_every_steps=1, mirror_dir=str(mirror)
+    )
+    train_experiment(config, tmp_path / "run")
+    for name in (
+        "last.pt",
+        "best.pt",
+        "metrics.json",
+        "config.json",
+        "progress.jsonl",
+        "step-2.pt",
+    ):
+        assert (mirror / name).exists(), name
+    assert not list(mirror.glob("*.tmp"))
+    snapshot = torch.load(mirror / "step-2.pt", weights_only=True)
+    assert "optimizer_state" not in snapshot and snapshot["metrics"]["steps"] == 2
+    assert len((mirror / "progress.jsonl").read_text().splitlines()) == 3
+
+
 def test_resume_rejects_changed_training_data(tmp_path) -> None:
     data_root = tmp_path / "data"
     generate_dataset(data_root, count=48, seed=17)

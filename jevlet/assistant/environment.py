@@ -11,12 +11,15 @@ import ctypes
 import json
 import os
 import subprocess
+import sys
 import time
-from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 
 from .skills import CATALOGUES
+
+if sys.platform == "win32":  # the data build imports this module on Linux (Colab)
+    from ctypes import wintypes
 
 CACHE = Path(__file__).resolve().parents[2] / "data" / "apps_cache.json"
 NOISE = ("uninstall", "help", "readme", "documentation", "release notes", "license", "website")

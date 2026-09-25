@@ -1,5 +1,8 @@
 # Jevlet
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NAME0x0/Jevlet/blob/main/notebooks/jevlet_colab.ipynb)
+[![Model on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-NAME0x0%2FJevlet-yellow)](https://huggingface.co/NAME0x0/Jevlet)
+
 Jevlet is a from-scratch research reconstruction of a Jev-like **System-One decision model**
 plus a laptop daily driver built on it. It is not TypeSafe's implementation and makes no claim
 about Jev's unpublished internals; `research/decisions.md` lists which public facts each design
@@ -33,7 +36,7 @@ Two backbones share this topology, training loop, metrics, and API:
 
 | Family | Backbone | Use |
 |---|---|---|
-| `pretrained` (Jevlet-P) | any BERT-family encoder, default MiniLM-L6 (22.9M) | daily driver |
+| `pretrained` (Jevlet-P) | any BERT-family encoder; bge-small-en-v1.5 (33M) since v4 | daily driver |
 | `scratch` | byte-level transformer, random init | topology research without pretrained confounds |
 
 ## Results so far (RTX A2000 4 GB)
@@ -52,6 +55,12 @@ v4 also plans assistant commands: 73.8% end-to-end on 80 held-out natural-langua
 The benchmark is 78 hand-written laptop tasks kept out of all training data
 (`jevlet/benchmarks.py`); the gate runs a task unattended only if P(safe) ≥ 0.9. CPU latency
 is ~40 ms for three questions in one pass. Details and caveats: `research/lab-notebook.md`.
+
+**v6 (training on Colab):** 50 skills, 1.35M training rows (9x v5): 183k real human commands from
+TOPv2, MASSIVE, and CLINC150 mapped onto the skills, 600k composed commands with typing noise, and the
+earlier sources scaled up. It is evaluated on the held-out test splits of those human corpora and on
+`jevlet/assistant/benchmark_v2.py` (98 commands). Results go to the
+[model card](https://huggingface.co/NAME0x0/Jevlet) when the run finishes.
 
 ## Quick start
 
@@ -80,11 +89,14 @@ Press **Alt+Space** (falls back to Alt+Shift+Space or Ctrl+Alt+J if taken) and t
 | Tab | **show me**: click the right control yourself; Jevlet records it as training data |
 | Esc | close; Enter on the empty bar undoes the last action |
 
-Skills: open apps (all Start-menu apps, including Store apps), switch/close/minimize/maximize
-windows, play/pause/skip, volume, Settings pages, dark/light mode, web search, websites,
-folders, typing text, keyboard shortcuts, clicking visible controls, timers, screenshots, lock,
-handing a request to Claude/ChatGPT/Gemini, and asking for clarification. "Open Spotify then play
-the next song" runs step by step, re-planning each step against the live screen.
+Skills (50, defined once in `shared/skills.json` for the Python planner and the app): apps and
+windows; playback, music, volume, brightness, Wi-Fi and Bluetooth; Settings pages and dark/light
+mode; web search, websites, folders, and files; typing, shortcuts, and clicking visible controls;
+timers, stopwatch, alarms (set, list, cancel, snooze or stop), reminders, calendar events (add,
+show, move, cancel), to-dos, and notes; calculator and unit conversion, world clock, weather,
+directions, date and battery; screenshots, lock, and power; email drafts; handing a request to
+Claude/ChatGPT/Gemini; and asking for clarification. "Open Spotify then play the next song" runs
+step by step, re-planning each step against the live screen.
 
 Every decision is a Jev-style choice over options found on your machine at that moment: installed
 apps, open windows, visible UI Automation controls, or spans of your own words. Jevlet never
@@ -148,25 +160,45 @@ replayed general data drops by at most one point. The old model is kept as `prev
 | Public sets | `public_data.py` | BANKING77, BoolQ, MNLI, MASSIVE, CLINC150 (out-of-scope → abstain); pinned revisions |
 | Daily route/risk decisions | `daily_synthetic.py` | paraphrased criteria, option subsets, soft targets on real overlaps |
 | Teacher corpus | `corpus/`, `teacher.py` | ~220 hand-labeled tasks with soft route and risk probabilities |
-| Screen grounding | `grounding_synthetic.py` | 12 app inventories; Teams and Spotify held out |
+| Screen grounding | `grounding_synthetic.py` | 22 app inventories; Teams and Spotify held out |
+| Real human commands | `assistant/real_commands.py` | TOPv2, MASSIVE, CLINC150 intents mapped to skills; TOPv2 parses give argument spans |
+| Composed commands | `assistant/commands_synthetic.py`, `lexicon.py`, `augment.py` | grammar-built fillers; typos, text-speak, casing, courtesy words |
 
-`scripts.build_mixture` combines sources into one hash-pinned train/dev/vault mixture; vault
-rows are never read by training or research.
+Every generated or imported command is dropped if it comes within 0.8 token Jaccard (digits
+collapsed) of a `benchmark_v2` case (`assistant/decontam.py`). Free-text arguments are spans of
+the command chosen by the model from candidates built by `shared/text_rules.json`
+(`python -m scripts.audit_spans` reports their recall). `python -m scripts.build_v6_data` builds
+every source and the hash-pinned train/dev/vault mixture; vault rows are never read by training
+or research. Personal inputs (your Start-menu apps and UI captures) are used only on Windows
+with `--personal`; Colab builds never contain them.
 
 ## Training
+
+**Colab (recommended for v6).** Open `notebooks/jevlet_colab.ipynb` with the badge above, pick an
+L4 or A100 runtime, add `HF_TOKEN` to Colab's Secrets, and run all cells. The notebook builds the
+data (or restores it from a hash-verified Drive cache), trains, calibrates, evaluates on held-out
+human commands, and publishes the weights with a full model card to Hugging Face. Everything is
+driven by `jevlet/colab.py`, which is tested locally:
+
+- the trainer runs detached from the kernel; closing the tab or restarting the kernel does not stop
+  it, and rerunning the cell re-attaches;
+- `last.pt` (with `last.prev.pt` one save back) and step snapshots mirror to Drive atomically; a
+  reset runtime resumes from the newest readable checkpoint, at the same row even on a different GPU;
+- out-of-memory halves the micro-batch and keeps the effective batch by gradient accumulation;
+  other crashes resume from the last save, up to five times;
+- a resumed run checks out the git commit it started with.
 
 Laptop (on mains power):
 
 ```powershell
-python -m scripts.train --config configs/pretrained_daily_v3.json --run-dir results/runs/jevlet-p-daily-v3
-python -m scripts.calibrate results/runs/jevlet-p-daily-v3/best.pt results/runs/jevlet-p-daily-v3/calibrated.pt --data data/daily/dev.jsonl --data data/teacher/dev.jsonl --fp16
-python -m scripts.eval_daily --checkpoint results/runs/jevlet-p-daily-v3/calibrated.pt
+python -m scripts.build_v6_data
+python -m scripts.train --config configs/pretrained_daily_v6.json --run-dir results/runs/jevlet-p-daily-v6
+python -m scripts.calibrate results/runs/jevlet-p-daily-v6/best.pt data/models/jevlet-v6.pt --fp16 --data data/real_commands/dev.jsonl --data data/commands_v6/dev.jsonl
+python -m scripts.eval_assistant data/models/jevlet-v6.pt --benchmark v2
 ```
 
-Runs save a resumable `last.pt` (model, optimizer, scaler, RNG, sampler) and resume with
-`--resume-from`. Colab: `notebooks/jevlet_colab.ipynb` pulls every dataset, trains in BF16,
-evaluates, exports, and runs the ablation search. It syncs to Drive or a private Hugging Face
-repo and survives VM loss by resuming. It never installs CUDA drivers.
+Runs save a resumable `last.pt` (model, optimizer, scaler, RNG, position in the epoch) and
+resume with `--resume-from`.
 
 ## Research
 

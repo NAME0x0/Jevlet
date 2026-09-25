@@ -127,7 +127,19 @@ class PretrainedCollator:
         self.unk_id = tokenizer.unk_token_id if tokenizer.unk_token_id is not None else 0
 
     def _encode(self, texts: list[str]) -> list[list[int]]:
-        return self.tokenizer(texts, add_special_tokens=False)["input_ids"]
+        """Token ids for [state, *questions, *options]. Questions and options repeat across
+        rows (all 50 skill names in every command row), so they are tokenized once and cached;
+        the state is always encoded fresh."""
+        cache = self.__dict__.setdefault("_token_cache", {})
+        unseen = list(dict.fromkeys(text for text in texts[1:] if text not in cache))
+        if len(cache) + len(unseen) > 200_000:  # bound memory on pathological inputs
+            cache.clear()
+            unseen = list(dict.fromkeys(texts[1:]))
+        if unseen:
+            ids = self.tokenizer(unseen, add_special_tokens=False)["input_ids"]
+            cache.update(zip(unseen, ids, strict=True))
+        state = self.tokenizer(texts[:1], add_special_tokens=False)["input_ids"][0]
+        return [state] + [cache[text] for text in texts[1:]]
 
     def _pack_row(
         self, example: DecisionExample, selected: list[int], topology: str
@@ -278,6 +290,7 @@ class PretrainedCollator:
         batch["valid_mask"] = torch.tensor(valid_rows, dtype=torch.bool)
         batch["records"] = records
         batch["question_count"] = len(records)
+        batch["example_count"] = len(examples)
         # Positions depend on topology, so the mask must come from the same topology.
         batch["attention_topology"] = topology
         return batch

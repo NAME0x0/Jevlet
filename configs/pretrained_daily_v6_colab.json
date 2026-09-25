@@ -1,0 +1,47 @@
+{
+  "seed": 1337,
+  "device": "auto",
+  "model": {
+    "family": "pretrained",
+    "backbone": "BAAI/bge-small-en-v1.5",
+    "attention_topology": "block_bidir",
+    "option_pool": "mean",
+    "decision_head": "pointer",
+    "max_packed_len": 1024,
+    "max_state_tokens": 224,
+    "max_question_tokens": 64,
+    "max_option_tokens": 40,
+    "gradient_checkpointing": false
+  },
+  "data": {
+    "train": "data/mixture_v6/train.jsonl",
+    "dev": "data/mixture_v6/dev.jsonl",
+    "vault": "data/mixture_v6/vault/vault.jsonl"
+  },
+  "training": {
+    "effective_batch": 64,
+    "batch_size": 64,
+    "gradient_accumulation": 1,
+    "max_steps": 25000,
+    "save_every_steps": 500,
+    "keep_steps": [2500, 6250, 12500],
+    "log_every_steps": 50,
+    "num_workers": 4,
+    "learning_rate": 0.002,
+    "backbone_learning_rate": 0.0001,
+    "lr_schedule": "cosine",
+    "warmup_steps": 500,
+    "min_lr_ratio": 0.05,
+    "weight_decay": 0.01,
+    "loss": "ce_brier",
+    "amp_dtype": "bf16",
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "batch_size": 64,
+    "permutation_examples": 64,
+    "benchmark_repeats": 5,
+    "max_examples": 6000
+  },
+  "notes": "Same 1.6M-example budget as pretrained_daily_v6.json (100k x 16) at effective batch 64: 25k steps, learning rates scaled by sqrt(4), warmup and snapshots at the same example counts. jevlet.colab fits batch_size x gradient_accumulation to the GPU and keeps their product at effective_batch."
+}

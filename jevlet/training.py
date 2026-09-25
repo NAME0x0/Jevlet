@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import random
+import shutil
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -190,6 +191,47 @@ def learning_rate_factor(step: int, training: dict[str, Any]) -> float:
     return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
 
+def _atomic_save(payload: dict[str, Any], destination: Path) -> None:
+    """Write then rename, so a crash mid-write never leaves a truncated checkpoint."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".tmp")
+    torch.save(payload, temporary)
+    temporary.replace(destination)
+
+
+def _mirror(path: Path, mirror: Path | None) -> None:
+    """Copy a run file to durable storage (Google Drive on Colab). A failed copy is reported
+    and retried at the next save; it never stops training."""
+    if mirror is None or not path.exists():
+        return
+    try:
+        mirror.mkdir(parents=True, exist_ok=True)
+        temporary = mirror / (path.name + ".tmp")
+        shutil.copyfile(path, temporary)
+        target = mirror / path.name
+        if path.name == "last.pt" and target.exists():
+            # Keep one generation back: if the newest copy is ever unreadable, resume falls
+            # back one save instead of restarting.
+            target.replace(mirror / "last.prev.pt")
+        temporary.replace(target)
+    except OSError as error:
+        print(json.dumps({"mirror_error": str(error), "file": path.name}), flush=True)
+
+
+class EpochOrder(torch.utils.data.Sampler[int]):
+    """One epoch's shuffled order, a pure function of the seed, optionally started part way."""
+
+    def __init__(self, size: int, seed: int, start: int = 0) -> None:
+        generator = torch.Generator().manual_seed(seed)
+        self.order = torch.randperm(size, generator=generator)[start:].tolist()
+
+    def __iter__(self):
+        return iter(self.order)
+
+    def __len__(self) -> int:
+        return len(self.order)
+
+
 def save_checkpoint(
     path: str | Path,
     model: nn.Module,
@@ -198,19 +240,29 @@ def save_checkpoint(
     temperature: float,
     metrics: dict[str, Any],
 ) -> None:
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model_config": model.config.to_dict(),
-            "model_state": model.state_dict(),
-            "optimizer_state": optimizer.state_dict(),
-            "training_config": training_config,
-            "temperature": temperature,
-            "metrics": metrics,
-        },
-        destination,
-    )
+    payload = {
+        "model_config": model.config.to_dict(),
+        "model_state": model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "training_config": training_config,
+        "temperature": temperature,
+        "metrics": metrics,
+    }
+    _atomic_save(payload, Path(path))
+
+
+def save_weights(
+    path: str | Path, model: nn.Module, training_config: dict[str, Any], metrics: dict[str, Any]
+) -> None:
+    """Weights without optimizer state (a third of the size): enough to evaluate or export."""
+    payload = {
+        "model_config": model.config.to_dict(),
+        "model_state": model.state_dict(),
+        "training_config": training_config,
+        "temperature": 1.0,
+        "metrics": metrics,
+    }
+    _atomic_save(payload, Path(path))
 
 
 def _rng_state() -> dict[str, Any]:
@@ -235,9 +287,9 @@ def _save_progress(
     scaler: torch.amp.GradScaler,
     config: dict[str, Any],
     step: int,
-    micro_step: int,
     epoch: int,
-    batch_offset: int,
+    example_offset: int,
+    train_sha: str,
 ) -> None:
     """Write a recoverable snapshot at an optimizer boundary."""
     payload = {
@@ -247,15 +299,12 @@ def _save_progress(
         "scaler_state": scaler.state_dict(),
         "training_config": config,
         "step": step,
-        "micro_step": micro_step,
         "epoch": epoch,
-        "batch_offset": batch_offset,
+        "example_offset": example_offset,
         "rng_state": _rng_state(),
-        "train_data_sha256": file_sha256(config["data"]["train"]),
+        "train_data_sha256": train_sha,
     }
-    temporary = path.with_name(path.name + ".tmp")
-    torch.save(payload, temporary)
-    temporary.replace(path)
+    _atomic_save(payload, path)
 
 
 def load_checkpoint(path: str | Path, device: str | torch.device = "cpu") -> tuple[nn.Module, dict]:
@@ -303,14 +352,25 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     if not len(train_dataset):
         raise ValueError("training dataset is empty")
 
-    def train_loader_for_epoch(epoch: int) -> DataLoader:
-        generator = torch.Generator().manual_seed(seed + epoch)
+    batch_size = int(config["training"].get("batch_size", 2))
+    workers = int(config["training"].get("num_workers", 0))
+    mirror = (
+        Path(config["training"]["mirror_dir"]) if config["training"].get("mirror_dir") else None
+    )
+    train_sha = file_sha256(config["data"]["train"])
+
+    def train_loader_for_epoch(epoch: int, start: int = 0) -> DataLoader:
+        # The order is a pure function of (seed, epoch); resuming slices it instead of
+        # collating and discarding every batch already seen.
         return DataLoader(
             train_dataset,
-            batch_size=int(config["training"].get("batch_size", 2)),
-            shuffle=True,
-            generator=generator,
-            num_workers=0,
+            batch_size=batch_size,
+            sampler=EpochOrder(len(train_dataset), seed + epoch, start),
+            # Its own generator: an iterator otherwise draws its worker seed from the global
+            # RNG, which would shift dropout after a resume.
+            generator=torch.Generator().manual_seed(seed + epoch),
+            num_workers=workers,
+            pin_memory=device.type == "cuda",
             collate_fn=collator,
         )
 
@@ -355,35 +415,51 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     keep_steps = {int(value) for value in config["training"].get("keep_steps", ())}
     optimizer.zero_grad(set_to_none=True)
     step = 0
-    micro_step = 0
     epoch = 0
-    batch_offset = 0
+    example_offset = 0
     resume_from = config["training"].get("resume_from")
     if resume_from:
         payload = torch.load(resume_from, map_location="cpu", weights_only=True)
         if payload["model_config"] != model.config.to_dict():
             raise ValueError("resume checkpoint model configuration differs")
-        if payload["train_data_sha256"] != file_sha256(config["data"]["train"]):
+        if payload["train_data_sha256"] != train_sha:
             raise ValueError("resume checkpoint training data differs")
         model.load_state_dict(payload["model_state"])
         optimizer.load_state_dict(payload["optimizer_state"])
-        scaler.load_state_dict(payload["scaler_state"])
+        for group in optimizer.param_groups:
+            group.setdefault("base_lr", group["lr"])
+        # A new session may land on a different GPU (bf16 vs fp16): scaler state only carries
+        # over between two fp16 sessions.
+        if scaler.is_enabled() and payload.get("scaler_state"):
+            scaler.load_state_dict(payload["scaler_state"])
         step = int(payload["step"])
-        micro_step = int(payload["micro_step"])
         epoch = int(payload["epoch"])
-        batch_offset = int(payload["batch_offset"])
-        if micro_step % gradient_accumulation:
-            raise ValueError("resume checkpoint is not at an optimizer boundary")
+        # Position is kept in examples, so a session with a different micro-batch size (and a
+        # matching gradient_accumulation) continues at the same row.
+        example_offset = int(
+            payload.get(
+                "example_offset",
+                int(payload.get("batch_offset", 0))
+                * int(payload["training_config"]["training"].get("batch_size", batch_size)),
+            )
+        )
         _restore_rng_state(payload["rng_state"])
+    micro_step = step * gradient_accumulation
+    if example_offset > len(train_dataset):
+        raise ValueError("resume checkpoint example offset exceeds the epoch")
 
-    train_loader = train_loader_for_epoch(epoch)
-    if batch_offset > len(train_loader):
-        raise ValueError("resume checkpoint batch offset exceeds epoch")
-    iterator = iter(train_loader)
-    for _ in range(batch_offset):
-        next(iterator)
+    def save_progress() -> None:
+        _save_progress(
+            run_path / "last.pt", model, optimizer, scaler, config, step, epoch,
+            example_offset, train_sha,
+        )  # fmt: skip
+        _mirror(run_path / "last.pt", mirror)
+        _mirror(run_path / "progress.jsonl", mirror)
+
+    iterator = iter(train_loader_for_epoch(epoch, example_offset))
     questions_seen = 0
     tokens_seen = 0
+    bad_losses = 0
     started = time.perf_counter()
     first_step = step
     log_every = int(config["training"].get("log_every_steps", 100))
@@ -400,11 +476,12 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
             batch = next(iterator)
         except StopIteration:
             epoch += 1
-            batch_offset = 0
-            train_loader = train_loader_for_epoch(epoch)
-            iterator = iter(train_loader)
+            example_offset = 0
+            iterator = iter(train_loader_for_epoch(epoch))
             batch = next(iterator)
-        batch_offset += 1
+        example_offset += int(
+            batch.get("example_count", len({record["example_id"] for record in batch["records"]}))
+        )
         batch = move_batch(batch, device)
         torch_amp_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
         autocast = torch.amp.autocast("cuda", dtype=torch_amp_dtype) if use_amp else nullcontext()
@@ -418,6 +495,14 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
                 float(config["training"].get("label_smoothing", 0.05)),
             )
             scaled_loss = loss / gradient_accumulation
+        if not torch.isfinite(loss):
+            # Skip the batch; bf16 has no scaler to absorb an overflow, so a NaN must never
+            # reach the weights. Persistent non-finite losses mean the run has diverged.
+            bad_losses += 1
+            if bad_losses > 50:
+                raise RuntimeError(f"non-finite loss for {bad_losses} batches at step {step}")
+            continue
+        bad_losses = 0
         scaler.scale(scaled_loss).backward()
         micro_step += 1
         questions_seen += len(output.records)
@@ -437,40 +522,22 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
                 rate = (step - first_step) / elapsed
                 progress = {
                     "step": step,
-                    "loss": round(float(loss), 4),
+                    "loss": round(float(loss.detach()), 4),
                     "lr_factor": round(factor, 4),
                     "steps_per_second": round(rate, 3),
                     "tokens_per_second": int(tokens_seen / elapsed),
                     "eta_hours": round((max_steps - step) / rate / 3600, 2),
                 }
                 print(json.dumps(progress), flush=True)
+                with (run_path / "progress.jsonl").open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps({**progress, "time": time.time()}) + "\n")
             if step in keep_steps:
-                save_checkpoint(
-                    run_path / f"step-{step}.pt", model, optimizer, config, 1.0, {"steps": step}
-                )
+                snapshot = run_path / f"step-{step}.pt"
+                save_weights(snapshot, model, config, {"steps": step})
+                _mirror(snapshot, mirror)
             if save_every_steps and step % save_every_steps == 0:
-                _save_progress(
-                    run_path / "last.pt",
-                    model,
-                    optimizer,
-                    scaler,
-                    config,
-                    step,
-                    micro_step,
-                    epoch,
-                    batch_offset,
-                )
-    _save_progress(
-        run_path / "last.pt",
-        model,
-        optimizer,
-        scaler,
-        config,
-        step,
-        micro_step,
-        epoch,
-        batch_offset,
-    )
+                save_progress()
+    save_progress()
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     train_seconds = max(time.perf_counter() - started, 1e-9)
@@ -515,7 +582,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         "seed": seed,
         "device": str(device),
         "amp_dtype": amp_dtype if use_amp else "none",
-        "train_data_sha256": file_sha256(config["data"]["train"]),
+        "train_data_sha256": train_sha,
         "dev_data_sha256": file_sha256(config["data"]["dev"]),
         "evaluation_examples": len(eval_examples),
     }
@@ -527,5 +594,7 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     (run_path / "config.json").write_text(
         json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    for name in ("best.pt", "metrics.json", "config.json", "progress.jsonl"):
+        _mirror(run_path / name, mirror)
     metrics["checkpoint"] = str(checkpoint_path)
     return metrics

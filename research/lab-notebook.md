@@ -113,10 +113,43 @@ These misses have now been seen, so benchmark v1 can no longer measure fixes for
 round gets a fresh held-out benchmark written before the data, and v1 is reported as
 "inspected".
 
+## 2026-09-25 — v6 data: 10x rows, real human commands, span recall
+
+v5 (44 skills) was never trained: its 44 "name: description" options needed ~730 positions, past
+BERT's 512, and the collator would have raised on every command row. v6 grows the catalogue to 50
+skills (weather, directions, list/cancel reminders, timer and alarm control), offers skill names
+only (312 positions; names were reworded to carry the description), and lets the collator trim the
+state only as far as the longest branch needs. Benchmark v2 gained 14 cases for the new skills,
+written before their templates (98 cases).
+
+**Data (mixture v6, 1,350,835 train rows, 9x v5).** 600k composed commands (grammar-built fillers
+instead of 6-13-item lists; surface variation on 99.9% of rows: typos, text-speak, contractions,
+casing, courtesy and filler words), 183k real human commands (TOPv2, MASSIVE, CLINC150 intents
+mapped to skills, two variants each), 240k daily decisions, 150k grounding, 96k public NLU
+(MNLI 10x), 60k System-One synthetic, 20k intents, 2k teacher. Rows within 0.8 token Jaccard
+(digits collapsed) of a benchmark-v2 case are dropped: 123 of 600k composed rows, mostly
+"what's N percent of M".
+
+**Finding: span extraction was the hidden real-world bottleneck.** On generated commands the
+span rules offered the gold argument 99.9% of the time; on TOPv2's human commands only ~70%
+(directions 62%, reminders 78%, alarm names 36%). Human phrasing puts the argument mid-sentence
+("what time should I leave for Boston if I want to arrive by 5"). Rules tuned on TOPv2 *train*
+only (preposition phrases, capitalized runs, weekday and clause cuts, colon/dash labels, a
+time-stripped second pass) raise recall@10 to 85.3% (directions 84%, weather 89%, reminders 87%,
+alarm names 75%); TOPv2 *test* shows the same 86-96% per skill, so the rules did not overfit.
+The rules now live in `shared/text_rules.json` for the C# port.
+
+Training moves to Colab (`notebooks/jevlet_colab.ipynb`): at ~381 tokens per row the laptop would
+need ~25 h for 1.6M examples. The Colab recipe keeps the example budget at effective batch 64
+(25k steps, learning rates x sqrt(4)) and keeps snapshots at 160k/400k/800k examples for a scaling
+curve on the held-out human commands.
+
 ## Next
 
-1. Natural-phrasing data (colloquial verbs, symptom -> setting, window-by-content) plus a new
-   held-out command benchmark written first; then v5.
+1. Train v6 on Colab; report the held-out human-command results, the scaling curve, and
+   benchmark v2 on the laptop.
+2. Natural-phrasing data (colloquial verbs, symptom -> setting, window-by-content) plus a new
+   held-out command benchmark written first; then v5 (done as v6 above).
 2. Grounding needs more app inventories, ideally recorded from live UIA trees of the apps
    actually used, plus demonstrations (the user performs the task; the clicked control is the
    label).
