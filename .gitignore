@@ -12,3 +12,10 @@ checkpoints/
 results/runs/
 research/experiment_log*.jsonl
 temp/
+
+# .NET
+app/**/bin/
+app/**/obj/
+.vs/
+*.user
+TestResults/

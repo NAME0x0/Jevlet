@@ -2,6 +2,8 @@
   "version": 6,
   "skill_question": "Which action does the command ask for?",
   "not_applicable": "Not applicable",
+  "risk_question": "Could carrying out this task cause irreversible loss, spend money, or share private data?",
+  "state_format": "Task: {command}\nActive window: {window}",
   "slots": {
     "app": "Which installed app does the command mean?",
     "window": "Which open window does the command mean?",

@@ -48,6 +48,7 @@ select = ["E", "F", "I", "UP", "B"]
 "jevlet/assistant/real_commands.py" = ["E501"]
 "jevlet/model_card.py" = ["E501"]
 "scripts/make_colab_notebook.py" = ["E501"]
+"scripts/export_onnx.py" = ["E501"]
 
 [tool.ruff.format]
 exclude = ["jevlet/benchmarks.py", "jevlet/assistant/skills.py", "jevlet/assistant/commands_synthetic.py", "jevlet/assistant/benchmark.py", "jevlet/grounding_synthetic.py", "jevlet/assistant/commands_v5.py", "jevlet/assistant/benchmark_v2.py", "jevlet/assistant/lexicon.py", "jevlet/assistant/augment.py", "jevlet/assistant/real_commands.py"]

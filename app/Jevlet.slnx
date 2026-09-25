@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jevlet.App/Jevlet.App.csproj" />
+    <Project Path="src/Jevlet.Core/Jevlet.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Jevlet.Core.Tests/Jevlet.Core.Tests.csproj" />
+  </Folder>
+</Solution>

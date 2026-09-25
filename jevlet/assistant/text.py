@@ -14,73 +14,35 @@ import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-ALIASES = {
-    "music": ("spotify", "media player", "groove", "apple music"),
-    "songs": ("spotify",),
-    "browser": ("edge", "chrome", "firefox", "brave"),
-    "web": ("edge", "chrome", "firefox"),
-    "internet": ("edge", "chrome", "firefox"),
-    "mail": ("outlook", "mail", "thunderbird"),
-    "email": ("outlook", "mail", "thunderbird"),
-    "inbox": ("outlook", "mail"),
-    "code": ("visual studio code", "pycharm", "cursor"),
-    "editor": ("visual studio code", "notepad", "notepad++"),
-    "ide": ("visual studio code", "pycharm", "visual studio"),
-    "notes": ("onenote", "notepad", "obsidian", "sticky notes"),
-    "terminal": ("terminal", "windows terminal", "powershell", "command prompt"),
-    "shell": ("terminal", "powershell", "command prompt"),
-    "files": ("file explorer",),
-    "folders": ("file explorer",),
-    "calc": ("calculator",),
-    "spreadsheet": ("excel",),
-    "slides": ("powerpoint",),
-    "presentation": ("powerpoint",),
-    "document": ("word",),
-    "chat": ("teams", "slack", "whatsapp", "discord"),
-    "meeting": ("teams", "zoom"),
-    "video call": ("teams", "zoom"),
-    "photos": ("photos",),
-    "pictures": ("photos",),
-    "settings": ("settings",),
-    "control panel": ("control panel",),
-    "store": ("microsoft store",),
-    "paint": ("paint",),
-    "camera": ("camera",),
-    "clock": ("clock",),
-    "alarm": ("clock",),
-    "timer": ("clock",),
-    "task manager": ("task manager",),
-}
-
-WORD = re.compile(r"[a-z0-9+#.]+")
-UNITS = {
-    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1,
-    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60,
-    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
-}  # fmt: skip
-NUMBER_WORDS = {
-    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "ten": 10, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40, "forty-five": 45,
-    "half": 0.5, "quarter": 0.25,
-}  # fmt: skip
-# Span rules live in shared/text_rules.json so the C# app applies the same lists in the same
-# order. A span is also offered cut at the first of each stop, so "lunch with omar next
-# tuesday at 1" yields "lunch with omar".
+# Every list and pattern lives in shared/text_rules.json so the C# app applies the same rules
+# in the same order. A span is also offered cut at the first of each stop, so "lunch with omar
+# next tuesday at 1" yields "lunch with omar".
 RULES = json.loads(
     (Path(__file__).resolve().parents[2] / "shared" / "text_rules.json").read_text(encoding="utf-8")
 )
+ALIASES: dict[str, tuple[str, ...]] = {k: tuple(v) for k, v in RULES["aliases"].items()}
+WORD = re.compile(RULES["word"])
+UNITS: dict[str, int] = RULES["duration_units"]
+NUMBER_WORDS: dict[str, float] = RULES["number_words"]
 TRIGGERS: tuple[str, ...] = tuple(RULES["triggers"])
 TRIGGER_PATTERNS = tuple(re.compile(rf"\b{re.escape(trigger)}\b[:,]?\s+") for trigger in TRIGGERS)
 STOPS: tuple[str, ...] = tuple(RULES["stops"])
 LABEL_BEFORE_NOUN = re.compile(RULES["label_before_noun"], re.I)
 
 
+def fold(text: str) -> str:
+    """Lowercase that never changes length, so offsets found in the folded text index the
+    original ("ß".casefold() is "ss", which would shift every later span). The C# port uses
+    ToLowerInvariant, which is length-preserving too."""
+    return "".join(ch if len(lowered := ch.lower()) != 1 else lowered for ch in text)
+
+
 def words(text: str) -> list[str]:
-    return WORD.findall(text.casefold())
+    return WORD.findall(fold(text))
 
 
 def _trigrams(text: str) -> set[str]:
-    padded = f"  {text.casefold()} "
+    padded = f"  {fold(text)} "
     return {padded[index : index + 3] for index in range(len(padded) - 2)}
 
 
@@ -93,7 +55,7 @@ def similarity(query: str, name: str) -> float:
     grams_query, grams_name = _trigrams(query), _trigrams(name)
     trigram = len(grams_query & grams_name) / max(len(grams_name), 1)
     alias = 0.0
-    lowered_name, lowered_query = name.casefold(), query.casefold()
+    lowered_name, lowered_query = fold(name), fold(query)
     for trigger, targets in ALIASES.items():
         if re.search(rf"\b{re.escape(trigger)}\b", lowered_query) and any(
             target in lowered_name for target in targets
@@ -125,7 +87,7 @@ def strip_courtesy(command: str) -> str:
 
 
 def _with_cuts(span: str) -> list[str]:
-    lowered = span.casefold()
+    lowered = fold(span)
     cuts = [span[: lowered.find(stop)].strip() for stop in STOPS if lowered.find(stop) > 0]
     return cuts + [span]
 
@@ -171,7 +133,7 @@ def span_candidates(command: str, limit: int = TEXT_CANDIDATES) -> list[str]:
     untimed = " ".join(TIME_EXPRESSION.sub(" ", text).split())
     for pattern in TRIGGER_PATTERNS:
         for source in (text, untimed) if untimed != text else (text,):
-            for match in pattern.finditer(source.casefold()):
+            for match in pattern.finditer(fold(source)):
                 candidates += _with_cuts(source[match.end() :].strip())
     candidates += _place_phrases(text)
     tokens = text.split()
@@ -184,7 +146,7 @@ def span_candidates(command: str, limit: int = TEXT_CANDIDATES) -> list[str]:
     unique: list[str] = []
     for candidate in candidates:
         cleaned = candidate.strip(" ,:;\"'“”")
-        if cleaned and cleaned.casefold() not in {item.casefold() for item in unique}:
+        if cleaned and fold(cleaned) not in {fold(item) for item in unique}:
             unique.append(cleaned)
     return unique[:limit]
 
@@ -199,7 +161,7 @@ def has_time(command: str) -> bool:
 
 def parse_duration(command: str) -> int | None:
     """Seconds for phrases like '25 minutes', 'an hour and a half', '90s'; None if absent."""
-    text = command.casefold().replace("-", " ")
+    text = fold(command).replace("-", " ")
     total = 0.0
     found = False
     for number, unit in re.findall(
@@ -217,5 +179,5 @@ def parse_duration(command: str) -> int | None:
 
 
 def contains_any(text: str, phrases: Sequence[str]) -> bool:
-    lowered = text.casefold()
+    lowered = fold(text)
     return any(phrase in lowered for phrase in phrases)

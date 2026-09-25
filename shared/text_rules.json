@@ -158,5 +158,182 @@
   "phrase_end": "\\s+(?:to|in|at|on|by|for|from|if|when|before|after|today|tonight|tomorrow|this|next|right|now|with|without|and|then|so|is|are|be|bad|like|look|looking|get|getting|during|because|once|every|starting|until)\\b|\\s*[,.;?!]",
   "proper_run_case_sensitive": "\\b[A-Z][\\w.'-]*(?:\\s+(?:of |de |la |the )?[A-Z][\\w.'-]*)*",
   "delegate": "\\b(?:ask|have|get|let|use|tell|make)\\s+\\w+(?:\\s+to)?\\s+|\\b\\w+,\\s+",
-  "time_expression": "\\b(?:(?:at |by |around )?\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b|\\d{1,2}[:.]\\d{2}|at \\d{1,2}(?:[:.]\\d{2})?\\b|noon|midnight|tomorrow|tmrw|tmr|2moro|tonight|tonite|today|this (?:morning|afternoon|evening|weekend)|(?:next |on |this )?(?:mon|tues|wednes|thurs|fri|satur|sun)day|next week|on the \\d{1,2}(?:st|nd|rd|th)?|in (?:\\d+|an?|two|three|half an) (?:minutes?|mins?|hours?|hrs?|days?|weeks?)|half past \\d|quarter (?:past|to) \\d|\\d{1,2} o'clock|\\d{1,2} in the (?:morning|afternoon|evening)|(?:around|by) \\d{1,2})\\b"
+  "time_expression": "\\b(?:(?:at |by |around )?\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b|\\d{1,2}[:.]\\d{2}|at \\d{1,2}(?:[:.]\\d{2})?\\b|noon|midnight|tomorrow|tmrw|tmr|2moro|tonight|tonite|today|this (?:morning|afternoon|evening|weekend)|(?:next |on |this )?(?:mon|tues|wednes|thurs|fri|satur|sun)day|next week|on the \\d{1,2}(?:st|nd|rd|th)?|in (?:\\d+|an?|two|three|half an) (?:minutes?|mins?|hours?|hrs?|days?|weeks?)|half past \\d|quarter (?:past|to) \\d|\\d{1,2} o'clock|\\d{1,2} in the (?:morning|afternoon|evening)|(?:around|by) \\d{1,2})\\b",
+  "word": "[a-z0-9+#.]+",
+  "aliases": {
+    "music": [
+      "spotify",
+      "media player",
+      "groove",
+      "apple music"
+    ],
+    "songs": [
+      "spotify"
+    ],
+    "browser": [
+      "edge",
+      "chrome",
+      "firefox",
+      "brave"
+    ],
+    "web": [
+      "edge",
+      "chrome",
+      "firefox"
+    ],
+    "internet": [
+      "edge",
+      "chrome",
+      "firefox"
+    ],
+    "mail": [
+      "outlook",
+      "mail",
+      "thunderbird"
+    ],
+    "email": [
+      "outlook",
+      "mail",
+      "thunderbird"
+    ],
+    "inbox": [
+      "outlook",
+      "mail"
+    ],
+    "code": [
+      "visual studio code",
+      "pycharm",
+      "cursor"
+    ],
+    "editor": [
+      "visual studio code",
+      "notepad",
+      "notepad++"
+    ],
+    "ide": [
+      "visual studio code",
+      "pycharm",
+      "visual studio"
+    ],
+    "notes": [
+      "onenote",
+      "notepad",
+      "obsidian",
+      "sticky notes"
+    ],
+    "terminal": [
+      "terminal",
+      "windows terminal",
+      "powershell",
+      "command prompt"
+    ],
+    "shell": [
+      "terminal",
+      "powershell",
+      "command prompt"
+    ],
+    "files": [
+      "file explorer"
+    ],
+    "folders": [
+      "file explorer"
+    ],
+    "calc": [
+      "calculator"
+    ],
+    "spreadsheet": [
+      "excel"
+    ],
+    "slides": [
+      "powerpoint"
+    ],
+    "presentation": [
+      "powerpoint"
+    ],
+    "document": [
+      "word"
+    ],
+    "chat": [
+      "teams",
+      "slack",
+      "whatsapp",
+      "discord"
+    ],
+    "meeting": [
+      "teams",
+      "zoom"
+    ],
+    "video call": [
+      "teams",
+      "zoom"
+    ],
+    "photos": [
+      "photos"
+    ],
+    "pictures": [
+      "photos"
+    ],
+    "settings": [
+      "settings"
+    ],
+    "control panel": [
+      "control panel"
+    ],
+    "store": [
+      "microsoft store"
+    ],
+    "paint": [
+      "paint"
+    ],
+    "camera": [
+      "camera"
+    ],
+    "clock": [
+      "clock"
+    ],
+    "alarm": [
+      "clock"
+    ],
+    "timer": [
+      "clock"
+    ],
+    "task manager": [
+      "task manager"
+    ]
+  },
+  "duration_units": {
+    "s": 1,
+    "sec": 1,
+    "secs": 1,
+    "second": 1,
+    "seconds": 1,
+    "m": 60,
+    "min": 60,
+    "mins": 60,
+    "minute": 60,
+    "minutes": 60,
+    "h": 3600,
+    "hr": 3600,
+    "hrs": 3600,
+    "hour": 3600,
+    "hours": 3600
+  },
+  "number_words": {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "ten": 10,
+    "fifteen": 15,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "forty-five": 45,
+    "half": 0.5,
+    "quarter": 0.25
+  }
 }

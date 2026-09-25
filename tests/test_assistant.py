@@ -26,6 +26,15 @@ def test_text_helpers() -> None:
     assert parse_duration("open spotify") is None
 
 
+def test_shared_catalogue_matches_the_python_constants() -> None:
+    # The C# app reads these from shared/skills.json; training uses the Python constants.
+    from jevlet.assistant.skills import _DATA
+    from jevlet.benchmarks import RISK_QUESTION, daily_state
+
+    assert _DATA["risk_question"] == RISK_QUESTION
+    assert _DATA["state_format"].format(command="x", window="y") == daily_state("x", "y")
+
+
 def test_every_slot_offers_not_applicable_last() -> None:
     env = Environment(
         ["Spotify", "Word"], ["chrome: Docs", "Spotify: Spotify Premium"], "chrome: Docs"
