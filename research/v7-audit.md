@@ -157,6 +157,14 @@ families of about 10k each. Teacher 2,292.
 - **Fix:** report risk with soft-target metrics (MAE, Brier against the target, reliability
   vs target) plus a hard-decision gate metric (false-safe rate at the execution threshold).
   Do not report hard-label ECE on soft-target questions.
+- **Confirmed on the vault** (2026-09-27, aggregate read of the regression guard) [M]:
+  - scored against its soft targets, risk calibration error is 0.0027 raw and 0.0013 after
+    temperature scaling;
+  - mean target distance is 0.0064 → 0.0060;
+  - hard-label ECE goes 0.0299 → 0.0323 over the same 23,279 questions.
+
+  Temperature scaling improves the quantity it optimises. The apparent degradation is entirely the
+  metric. The new evaluator also reproduces every published vault number exactly.
 - **Calibration hygiene** [O]: the temperatures were fitted on `real_commands/dev` and
   `commands_v6/dev`, both of which are inside `mixture_v6/dev`. So "calibrated ECE" for the
   assistant groups on mixture dev is in-sample. The vault is clean with respect to
@@ -301,6 +309,26 @@ Measured over all 1,350,835 train rows by normalising the first state line (the 
 The "10×" was mostly surface variation and upsampling. There are about 0.55M distinct task
 texts. The five tiny synthetic families score 100% on dev because they are memorised [I].
 Label balance for assistant skills is reasonable: 1.5–4.6% per skill.
+
+**Data provenance correction (2026-09-27)** [M]:
+- **The table above describes the local build, not the trained one.** It was measured on the
+  local `data/mixture_v6`, which was built with personal inputs: live UIA captures of this
+  machine's apps (13,539 grounding rows labelled `live:ChatGPT` / `live:WindowsTerminal`) and the
+  installed-app list. The Colab training build used `personal_inputs: false`.
+- **Which sources differ:** comparing source hashes in the published manifest with the local one,
+  only three differ: commands train, commands dev, and grounding train. Real commands (train, dev
+  and vault), grounding dev, daily, public, intents, synthetic and teacher are all byte-identical.
+- **Trained sources regenerated:** the non-personal command source (seed 606, no local apps) and
+  grounding source (seed 4242, no extra apps) were regenerated and match the published training
+  manifest **exactly** (`13712a6e…`, `e08792d5…`).
+- **Conclusion:** the public v6 weights were not trained on the local captures.
+- **Diversity on the trained sources:**
+  - the assistant family has 54.0% unique normalised tasks (422,264 of 782,674; the local build
+    gave 53.8%);
+  - the trained grounding source has **1,993 distinct normalised task phrasings** in 300,000 rows
+    (0.66%), and the mixture samples 150,000 of them.
+
+  The grounding-diversity diagnosis (§1.5) therefore holds for the data v6 actually saw.
 
 ### 1.8 Scaling and training curve [O][I]
 
@@ -940,8 +968,8 @@ The Jevlet-S causal prefix/KV-reuse experiment (brief Phase 14) is **deprioritis
 
 ## 11. Benchmark protocol: JevletBench-v1
 
-The full proposed design is in **`research/jevletbench-v1.md`** (draft, awaiting owner approval;
-not frozen). It covers:
+The full proposed design is in **`research/jevletbench-v1.md`** (revision 2 of 2026-09-27, awaiting
+owner approval; not frozen). It covers:
 - panels and sizes;
 - provenance and the authorship rule;
 - the dev/calibration/locked/external split policy;
@@ -1105,3 +1133,67 @@ still clearly saturates below target.
 **7. Primary line confirmed:** D1 + D3 + D2 (measurement, observable state, app-diverse grounding
 with better abstention data). Then the compute track: A current listwise / B pure contrastive /
 C contrastive top-K → listwise / D lower-layer cached listwise, at K = 4, 8, 16, 50, 100 and 255.
+
+### Decisions and actions (owner, 2026-09-27)
+
+**1. Published.**
+- The three step-0 commits are pushed to GitHub (`72717c5`).
+- The Hugging Face model card is corrected on `main` (commit `0d8a6ee5`):
+  - per-question grounding (Evaluation A, 3,000 examples, and Evaluation B, 30,000 examples,
+    labelled separately), with the false-abstention share (94.6% of target-on-screen errors);
+  - the soft-target risk note (D) and the in-sample calibration note (E);
+  - training time with its measured and estimated parts distinguished;
+  - loss-log coverage;
+  - the training-progression relabel and two figures (loss at the logged steps only; one-run
+    progression with learning-rate factors).
+- The `v6` tag is unchanged. Weights, results and progress files are identical between `v6` and
+  `main`.
+
+**2. Wording rule for grounding claims.** Teams and Spotify are held out **from the grounding
+training split** only. They appear by name elsewhere in training (the command generators' app
+lists), so no stronger isolation is claimed.
+
+**3. Authorship, amended.**
+- Natural-language panels come from a mixture of genuine opt-in palette usage, some commands
+  written by the owner, multiple independent human authors where practical, and source-separated
+  public data.
+- The owner does not hand-write thousands of items (a single author's style is its own narrow
+  distribution).
+- Provenance is recorded per item or cluster.
+- Central paper claims need a sufficiently large **public, reproducible** external evaluation.
+  Private hash-only panels support product validation only.
+
+**4. Unknown state is not maximum risk.**
+- *Action risk given known state* is kept separate from *state sufficiency for autonomous
+  execution*.
+- When a safety-relevant variable is unobservable, the policy asks for confirmation or abstains,
+  without labelling the action itself R3.
+
+**5. Statistics, amended.**
+- Skill guards are paired non-inferiority tests with registered margins (−0.3 pp vault skill,
+  −1.0 pp desktop commands).
+- Safety reports one-sided upper confidence bounds, with enough R3 clusters for the bound to mean
+  something (≈300 for ≈1%).
+- The abstention guard is replaced by correct abstention, false abstention, coverage at ≤1/2/5%
+  error, and AURC.
+- The option-order test is sized to bound the ≤1% flip target.
+- End-to-end palette latency (median and p95, with a stage breakdown) is recorded next to the
+  model-pass ceilings.
+
+**6. Grounding panel.**
+- At least 20 apps, with no small set of apps dominating, app-disjoint from training where
+  possible.
+- Explicit strata: target present, target absent, near-duplicate controls, unfamiliar vocabulary,
+  cross-app lexical similarity, and controls whose meaning depends on state.
+- "Unfamiliar wording → none" must not remain exploitable.
+
+**7. Collection over authoring.** Programmatic transforms multiply independent base items; the base
+item or cluster stays the statistical unit.
+
+**8. Unchanged:**
+- The fixed 50-skill listwise architecture stays as the v6 baseline.
+- D4 and D5 are both kept and tested where cardinality makes caching useful (apps, files,
+  windows, controls, 50–255 candidates).
+- BGE-base stays a diagnostic, run only after the data and state interventions are tested on
+  BGE-small.
+- No v7 data or training until JevletBench-v1 is approved and frozen.
