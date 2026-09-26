@@ -290,6 +290,7 @@ def _save_progress(
     epoch: int,
     example_offset: int,
     train_sha: str,
+    run_totals: dict[str, Any] | None = None,
 ) -> None:
     """Write a recoverable snapshot at an optimizer boundary."""
     payload = {
@@ -303,8 +304,32 @@ def _save_progress(
         "example_offset": example_offset,
         "rng_state": _rng_state(),
         "train_data_sha256": train_sha,
+        # Time, rows, and memory of every session so far: a resumed run reports the whole run.
+        "run_totals": run_totals or {},
     }
     _atomic_save(payload, path)
+
+
+def _restore_progress_log(run_path: Path, mirror: Path | None, step: int) -> None:
+    """Carry the loss log of earlier sessions into a resumed one.
+
+    A new Colab VM starts with an empty run directory; without this, the first mirror of the
+    new session's log would overwrite Drive's copy of every earlier session. Rows past the resume
+    step (logged after the last checkpoint, then lost) and any half-written last line are dropped.
+    """
+    local = run_path / "progress.jsonl"
+    source = local if local.exists() else (mirror / "progress.jsonl" if mirror else None)
+    if source is None or not source.exists():
+        return
+    kept = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if int(row.get("step", 0)) <= step:
+            kept.append(line)
+    local.write_text("".join(line + "\n" for line in kept), encoding="utf-8")
 
 
 def load_checkpoint(path: str | Path, device: str | torch.device = "cpu") -> tuple[nn.Module, dict]:
@@ -417,9 +442,12 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     step = 0
     epoch = 0
     example_offset = 0
+    prior_totals: dict[str, Any] = {"complete": True}
     resume_from = config["training"].get("resume_from")
     if resume_from:
         payload = torch.load(resume_from, map_location="cpu", weights_only=True)
+        # Checkpoints written before run totals existed cannot say how long earlier sessions took.
+        prior_totals = dict(payload.get("run_totals") or {"complete": False})
         if payload["model_config"] != model.config.to_dict():
             raise ValueError("resume checkpoint model configuration differs")
         if payload["train_data_sha256"] != train_sha:
@@ -447,11 +475,25 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
     micro_step = step * gradient_accumulation
     if example_offset > len(train_dataset):
         raise ValueError("resume checkpoint example offset exceeds the epoch")
+    if resume_from:
+        _restore_progress_log(run_path, mirror, step)
+
+    def run_totals() -> dict[str, Any]:
+        peak = torch.cuda.max_memory_allocated(device) / (1024**2) if device.type == "cuda" else 0.0
+        return {
+            "train_seconds": float(prior_totals.get("train_seconds", 0.0))
+            + (time.perf_counter() - started),
+            "questions": int(prior_totals.get("questions", 0)) + questions_seen,
+            "tokens": int(prior_totals.get("tokens", 0)) + tokens_seen,
+            "sessions": int(prior_totals.get("sessions", 0)) + 1,
+            "peak_vram_mb": max(float(prior_totals.get("peak_vram_mb", 0.0)), peak),
+            "complete": bool(prior_totals.get("complete", True)),
+        }
 
     def save_progress() -> None:
         _save_progress(
             run_path / "last.pt", model, optimizer, scaler, config, step, epoch,
-            example_offset, train_sha,
+            example_offset, train_sha, run_totals(),
         )  # fmt: skip
         _mirror(run_path / "last.pt", mirror)
         _mirror(run_path / "progress.jsonl", mirror)
@@ -537,9 +579,10 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
                 _mirror(snapshot, mirror)
             if save_every_steps and step % save_every_steps == 0:
                 save_progress()
-    save_progress()
     if device.type == "cuda":
         torch.cuda.synchronize(device)
+    totals = run_totals()
+    save_progress()
     train_seconds = max(time.perf_counter() - started, 1e-9)
 
     logits, records, speed = collect_predictions(model, dev_loader, device)
@@ -572,10 +615,16 @@ def train_experiment(config: dict[str, Any], run_dir: str | Path) -> dict[str, A
         "temperature": temperature,
         "parameter_count": model.parameter_count,
         "activated_parameter_count": model.parameter_count,
-        "peak_vram_mb": (
-            torch.cuda.max_memory_allocated(device) / (1024**2) if device.type == "cuda" else 0.0
+        # Whole run across resumed sessions; "complete" is false when an earlier session's
+        # checkpoint predates run totals, so its time is missing from train_seconds.
+        "peak_vram_mb": max(
+            totals["peak_vram_mb"],
+            torch.cuda.max_memory_allocated(device) / (1024**2) if device.type == "cuda" else 0.0,
         ),
-        "train_seconds": train_seconds,
+        "train_seconds": totals["train_seconds"],
+        "train_seconds_complete": totals["complete"],
+        "train_seconds_this_session": train_seconds,
+        "training_sessions": totals["sessions"],
         "train_questions_per_second": questions_seen / train_seconds,
         "train_tokens_per_second": tokens_seen / train_seconds,
         "steps": step,

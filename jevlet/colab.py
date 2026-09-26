@@ -399,8 +399,29 @@ def train(paths: Paths, profile: dict[str, Any], base: str, attempts: int = 5) -
 # --------------------------------------------------------------------------- evaluation
 
 
+# The main question of each multi-question family; other questions are named by role.
+MAIN_QUESTION = {"assistant": "skill", "grounding": "control", "daily_synthetic": "route"}
+
+
+def question_role(family: str, index: int, text: str) -> str:
+    """Name a question by what it asks, so one family's questions are never averaged together
+    (v6 reported grounding as the mean of its control choice and a near-trivial risk question)."""
+    from .benchmarks import RISK_QUESTION
+
+    if text == RISK_QUESTION:
+        return "risk"
+    if index == 0:
+        return MAIN_QUESTION.get(family, "decision")
+    return "slot" if family == "assistant" else f"q{index}"
+
+
 def evaluate_checkpoint(checkpoint: Path, data: Path, batch_size: int = 64) -> dict[str, Any]:
-    """Accuracy and calibration per question type: skill, risk, and argument slots."""
+    """Accuracy and calibration per family and question role (skill, risk, slot, control...).
+
+    ``ece`` scores confidence against argmax correctness. Soft-target questions (risk) also get
+    ``target_ece`` and ``target_distance``, which compare the prediction with its target
+    distribution; hard ECE on those questions penalizes a model that reproduces its targets.
+    """
     import torch
     from torch.utils.data import DataLoader
 
@@ -414,19 +435,25 @@ def evaluate_checkpoint(checkpoint: Path, data: Path, batch_size: int = 64) -> d
     temperatures = payload.get("temperatures") or {}
     collator = build_collator(model, payload.get("training_config", {}).get("data"))
     examples = JsonlDecisionDataset(data).examples
+    texts = {
+        (example.example_id, index): question.text
+        for example in examples
+        for index, question in enumerate(example.questions)
+    }
     loader = DataLoader(examples, batch_size=batch_size, collate_fn=collator)
     logits, records, speed = collect_predictions(model, loader, device)
+    roles: dict[str, set[str]] = {}
+    named: list[tuple[str, str]] = []
+    for record in records:
+        family, index = record["family"], record["question_index"]
+        role = question_role(family, index, texts[(record["example_id"], index)])
+        roles.setdefault(family, set()).add(role)
+        named.append((family, role))
     groups: dict[str, list[int]] = {"all": list(range(len(records)))}
-    for index, record in enumerate(records):
-        family = record["family"]
-        kind = (
-            "skill"
-            if record["question_index"] == 0
-            else "risk"
-            if record["question_index"] == 1
-            else "slot"
-        )
-        groups.setdefault(f"{family}/{kind}" if family == "assistant" else family, []).append(index)
+    for index, (family, role) in enumerate(named):
+        # Single-question families keep their plain name; the assistant always splits by role.
+        split = family == "assistant" or len(roles[family]) > 1
+        groups.setdefault(f"{family}/{role}" if split else family, []).append(index)
     report: dict[str, Any] = {"examples": len(examples), "speed": speed}
     for name, indices in sorted(groups.items()):
         subset_logits = [logits[i] for i in indices]
@@ -438,11 +465,22 @@ def evaluate_checkpoint(checkpoint: Path, data: Path, batch_size: int = 64) -> d
             "accuracy": raw["accuracy"],
             "ece": raw["ece"],
         }
+        if raw["soft_target_fraction"]:
+            report[name].update(
+                target_ece=raw["target_ece"],
+                target_distance=raw["target_distance"],
+                soft_target_fraction=raw["soft_target_fraction"],
+            )
         # Per-kind temperatures only apply to a group of one kind (not to "all").
         if len({record["kind"] for record in subset_records}) == 1:
             temperature = float(temperatures.get(kind, payload.get("temperature", 1.0)))
             calibrated = compute_metrics(subset_logits, subset_records, temperature)
             report[name].update(calibrated_ece=calibrated["ece"], nll=calibrated["nll"])
+            if raw["soft_target_fraction"]:
+                report[name].update(
+                    calibrated_target_ece=calibrated["target_ece"],
+                    calibrated_target_distance=calibrated["target_distance"],
+                )
     del model
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
     return report

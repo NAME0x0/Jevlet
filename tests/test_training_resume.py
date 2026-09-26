@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 
 import pytest
@@ -131,3 +132,43 @@ def test_resume_rejects_changed_training_data(tmp_path) -> None:
     resumed["training"]["resume_from"] = str(first_dir / "last.pt")
     with pytest.raises(ValueError, match="training data differs"):
         train_experiment(resumed, tmp_path / "resumed")
+
+
+def test_resume_keeps_the_earlier_progress_log_and_totals_the_run(tmp_path) -> None:
+    # A new Colab VM resumes into an empty run directory: the loss log of the first session
+    # must come back from Drive, and time must add up across sessions.
+    data_root = tmp_path / "data"
+    generate_dataset(data_root, count=48, seed=17)
+    config = _config(data_root)
+    mirror = tmp_path / "drive" / "run"
+    config["training"].update(max_steps=2, log_every_steps=1, mirror_dir=str(mirror))
+    train_experiment(config, tmp_path / "first")
+    first = torch.load(mirror / "last.pt", weights_only=True)["run_totals"]
+    assert first["sessions"] == 1 and first["complete"] and first["train_seconds"] > 0
+    # A row logged after the last checkpoint (then lost in a crash) and a half-written line.
+    with (mirror / "progress.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write('{"step": 3, "loss": 1.0}\n{"step": 4, "lo')
+
+    resumed = deepcopy(config)
+    resumed["training"].update(max_steps=4, resume_from=str(mirror / "last.pt"))
+    metrics = train_experiment(resumed, tmp_path / "second")
+    steps = [
+        json.loads(line)["step"] for line in (mirror / "progress.jsonl").read_text().splitlines()
+    ]
+    assert steps == [1, 2, 3, 4]
+    assert metrics["training_sessions"] == 2 and metrics["train_seconds_complete"]
+    assert metrics["train_seconds"] > metrics["train_seconds_this_session"]
+
+
+def test_resume_from_a_checkpoint_without_totals_marks_time_incomplete(tmp_path) -> None:
+    data_root = tmp_path / "data"
+    generate_dataset(data_root, count=48, seed=17)
+    config = _config(data_root)
+    train_experiment(config, tmp_path / "first")
+    old = torch.load(tmp_path / "first" / "last.pt", weights_only=True)
+    del old["run_totals"]  # as written before run totals existed (v6's first session)
+    torch.save(old, tmp_path / "old.pt")
+    resumed = deepcopy(config)
+    resumed["training"].update(max_steps=2, resume_from=str(tmp_path / "old.pt"))
+    metrics = train_experiment(resumed, tmp_path / "second")
+    assert metrics["train_seconds_complete"] is False

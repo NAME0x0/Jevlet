@@ -6,7 +6,7 @@ from typing import Any
 
 MAXIMIZE = (
     "accuracy",
-    "ood_accuracy",
+    "held_out_domain_accuracy",
     "unknown_accuracy",
     "option_order_prediction_agreement",
     "questions_per_second",
@@ -14,8 +14,12 @@ MAXIMIZE = (
 MINIMIZE = ("brier", "ece", "nll", "latency_ms_per_question", "peak_vram_mb")
 
 
+RENAMED = {"held_out_domain_accuracy": "ood_accuracy"}  # new name -> name in older results
+
+
 def _value(result: dict[str, Any], metric: str, maximize: bool) -> float:
-    value = result.get("metrics", result).get(metric)
+    metrics = result.get("metrics", result)
+    value = metrics.get(metric, metrics.get(RENAMED.get(metric, metric)))
     if value is None:
         return float("-inf") if maximize else float("inf")
     return float(value)

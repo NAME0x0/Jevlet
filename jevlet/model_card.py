@@ -43,6 +43,24 @@ def _row(name: str, block: dict[str, Any] | None) -> str:
     )
 
 
+def _training_time(metrics: dict[str, Any]) -> str:
+    """Whole-run training time; says so when an earlier session was not timed."""
+    hours = _num(metrics.get("train_seconds", 0) / 3600, 2)
+    rate = f"{int(metrics.get('train_tokens_per_second', 0)):,} tokens/s"
+    sessions = int(metrics.get("training_sessions", 1))
+    if metrics.get("train_seconds_complete", True):
+        across = f" across {sessions} sessions" if sessions > 1 else ""
+        return f"{hours} h{across}, {rate}"
+    return f"at least {hours} h (an earlier session was not timed), {rate}"
+
+
+def _grounding_row(dev: dict[str, Any]) -> str:
+    # Older results averaged the control choice with the grounding risk question.
+    if "grounding/control" in dev:
+        return _row("Grounding: which control (held-out apps)", dev["grounding/control"])
+    return _row("Grounding: control and risk questions averaged", dev.get("grounding"))
+
+
 def render_model_card(
     results: dict[str, Any], *, repo_id: str, version: str, github: str, license: str = "mit"
 ) -> str:
@@ -76,6 +94,7 @@ def render_model_card(
         f"{_pct(final_skill.get('accuracy'))} | {_num(final_skill.get('ece'))} |"
     )
     temperatures = results.get("temperatures") or {}
+    grounding_row = _grounding_row(dev)
     commit = config.get("provenance", {}).get("git_commit", "unknown")
     yaml_datasets = "\n".join(f"  - {repo}" for repo, _, _ in DATASETS)
     yaml_tags = "\n".join(f"  - {tag}" for tag in TAGS)
@@ -146,7 +165,7 @@ Test splits of TOPv2, MASSIVE, and CLINC150 mapped to Jevlet's skills
 {_row("All questions", dev.get("all"))}
 {_row("Commands: skill", dev.get("assistant/skill"))}
 {_row("Commands: arguments", dev.get("assistant/slot"))}
-{_row("Grounding (which control)", dev.get("grounding"))}
+{grounding_row}
 
 ### Scaling with training examples (skill accuracy on the held-out human commands)
 
@@ -187,7 +206,7 @@ System-One families (contradiction, missing information, calibration, rules).
 | Loss | {hyper.get("loss")} (cross-entropy plus Brier, a proper scoring rule) |
 | Precision | {hyper.get("amp_dtype")} mixed precision |
 | Hardware | {", ".join(gpus) or "n/a"} (Google Colab) |
-| Training time | {_num(metrics.get("train_seconds", 0) / 3600, 2)} h, {int(metrics.get("train_tokens_per_second", 0)):,} tokens/s |
+| Training time | {_training_time(metrics)} |
 | Peak VRAM | {_num(metrics.get("peak_vram_mb", 0) / 1024, 1)} GB |
 
 `progress.jsonl` holds the loss curve; `run_config.json` the exact configuration and every session's
