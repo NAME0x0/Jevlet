@@ -84,6 +84,23 @@ def graph_inputs(model: PretrainedJevlet, example: DecisionExample) -> tuple[dic
     return inputs, records
 
 
+def catalogue_identity(catalogue: dict[str, Any]) -> dict[str, Any]:
+    """What the app checks before trusting a model with its catalogue (catalogue_fingerprint)."""
+    from .assistant.skills import catalogue_fingerprint
+    from .benchmarks import RISK_QUESTION
+
+    fingerprint = catalogue_fingerprint(
+        catalogue,
+        risk_question=RISK_QUESTION,
+        state_format="Task: {command}\nActive window: {window}",
+    )
+    return {
+        "version": int(catalogue["version"]),
+        "fingerprint": fingerprint,
+        "skills": [skill["name"] for skill in catalogue["skills"]],
+    }
+
+
 def manifest(model: PretrainedJevlet, payload: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     tokenizer = model.tokenizer
     collator = model.make_collator()
@@ -118,7 +135,14 @@ def manifest(model: PretrainedJevlet, payload: dict[str, Any], checkpoint: Path)
     }
 
 
-def export_onnx(checkpoint: str | Path, output_dir: str | Path, opset: int = 18) -> dict[str, Any]:
+def export_onnx(
+    checkpoint: str | Path,
+    output_dir: str | Path,
+    opset: int = 18,
+    catalogue: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Write model.onnx, vocab.txt, and model.json. ``catalogue`` is the skills.json the model was
+    trained with; its identity goes into model.json so the app can refuse a mismatched model."""
     checkpoint = Path(checkpoint)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -158,6 +182,8 @@ def export_onnx(checkpoint: str | Path, output_dir: str | Path, opset: int = 18)
     else:
         shutil.copyfile(vocab, output / "vocab.txt")
     info = manifest(model, payload, checkpoint)
+    if catalogue is not None:
+        info["catalogue"] = catalogue_identity(catalogue)
     info["onnx_sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
     (output / "model.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
     return info

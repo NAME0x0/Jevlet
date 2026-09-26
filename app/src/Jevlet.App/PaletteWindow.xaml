@@ -1,0 +1,92 @@
+<Window x:Class="Jevlet.App.PaletteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Jevlet"
+        Width="720"
+        SizeToContent="Height"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Ideal"
+        FontFamily="Segoe UI Variable Text, Segoe UI">
+    <Window.Resources>
+        <!-- A bare text box: the palette draws its own chrome. -->
+        <Style x:Key="BareInput" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Accent}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource Accent}" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="KeyCap" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Card}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="5,1" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,16,0" />
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="Frame" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="10">
+        <StackPanel>
+            <!-- Command row -->
+            <Grid Margin="22,16,18,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="LeadIcon" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
+                           Foreground="{DynamicResource TextTertiary}" VerticalAlignment="Center" />
+                <TextBox x:Name="Input" Grid.Column="1" Margin="14,0,12,0" Style="{StaticResource BareInput}"
+                         AutomationProperties.Name="Command" />
+                <TextBlock x:Name="Placeholder" Grid.Column="1" Margin="16,0,12,0" IsHitTestVisible="False"
+                           Text="What should I do?" FontSize="22" FontFamily="Segoe UI Variable Display, Segoe UI"
+                           Foreground="{DynamicResource TextTertiary}" VerticalAlignment="Center" />
+                <Border x:Name="StatusPill" Grid.Column="2" CornerRadius="9" Padding="9,3" Background="{DynamicResource Card}"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="Status" FontSize="11" Foreground="{DynamicResource TextTertiary}" />
+                </Border>
+            </Grid>
+
+            <Rectangle Height="1" Fill="{DynamicResource Stroke}" />
+
+            <!-- Plan, answer, or today: built in code -->
+            <StackPanel x:Name="Body" Margin="10,10,10,4" />
+
+            <!-- Keys -->
+            <Grid Margin="22,6,20,14">
+                <StackPanel x:Name="Keys" Orientation="Horizontal">
+                    <Border Style="{StaticResource KeyCap}"><TextBlock Text="Enter" Style="{StaticResource Hint}" Margin="0" /></Border>
+                    <TextBlock x:Name="EnterHint" Text="run" Style="{StaticResource Hint}" />
+                    <Border Style="{StaticResource KeyCap}"><TextBlock Text="↑↓" Style="{StaticResource Hint}" Margin="0" /></Border>
+                    <TextBlock Text="other actions" Style="{StaticResource Hint}" />
+                    <Border Style="{StaticResource KeyCap}"><TextBlock Text="Esc" Style="{StaticResource Hint}" Margin="0" /></Border>
+                    <TextBlock Text="close" Style="{StaticResource Hint}" />
+                </StackPanel>
+                <TextBlock x:Name="ModelInfo" HorizontalAlignment="Right" Style="{StaticResource Hint}" Margin="0" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

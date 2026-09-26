@@ -97,6 +97,26 @@ public class GoldenTests
     }
 
     [Fact]
+    public void Catalogue_fingerprint_matches_python()
+    {
+        // packing.json's model block is the exported model.json; the exporter refuses a model whose
+        // catalogue differs from shared/skills.json, so this is Python's fingerprint of that file.
+        var trained = Read("packing.json").GetProperty("model").GetProperty("catalogue");
+        Assert.Equal(trained.GetProperty("fingerprint").GetString(), Catalogue.Shared.Fingerprint);
+        Assert.Equal(trained.GetProperty("version").GetInt32(), Catalogue.Shared.Version);
+        Assert.Equal(Strings(trained.GetProperty("skills")), Catalogue.Shared.Skills.Select(s => s.Name).ToList());
+    }
+
+    [Fact]
+    public void Models_for_another_catalogue_are_refused()
+    {
+        var model = ModelManifest.Parse(Read("packing.json").GetProperty("model"));
+        Assert.Null(ModelCompatibility.Problem(model, Catalogue.Shared));
+        Assert.NotNull(ModelCompatibility.Problem(model with { CatalogueFingerprint = null }, Catalogue.Shared));
+        Assert.NotNull(ModelCompatibility.Problem(model with { CatalogueFingerprint = "0000" }, Catalogue.Shared));
+    }
+
+    [Fact]
     public void Text_rules_match_python()
     {
         var golden = Read("text.json");
@@ -178,7 +198,7 @@ public class GoldenTests
         }
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            var candidate = Path.Combine(directory.FullName, "data", "models", "onnx", "v4");
+            var candidate = Path.Combine(directory.FullName, "data", "models", "onnx", "v6");
             if (File.Exists(Path.Combine(candidate, "model.onnx")))
             {
                 return candidate;

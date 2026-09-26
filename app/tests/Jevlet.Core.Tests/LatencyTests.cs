@@ -25,8 +25,10 @@ public class LatencyTests(ITestOutputHelper output)
         var timings = new List<double>();
         for (var run = 0; run < 20; run++)
         {
+            // Every command has its own length: measure with varying states, as when typing.
+            var command = "remind me to call the bank tomorrow at 5" + new string('!', run % 7) + string.Concat(Enumerable.Repeat(" please", run % 3));
             var watch = Stopwatch.StartNew();
-            var answers = engine.Evaluate(state, questions);
+            var answers = engine.Evaluate(catalogue.State(command, "OUTLOOK: Inbox - Outlook"), questions);
             timings.Add(watch.Elapsed.TotalMilliseconds);
             Assert.Equal(2, answers.Count);
         }

@@ -1,15 +1,39 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Windows 10 SDK projections for Windows.Devices.Radios (Wi-Fi / Bluetooth toggles). -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <!-- System.Windows.Forms.NotifyIcon for the tray icon. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Jevlet</AssemblyName>
+    <RootNamespace>Jevlet.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\jevlet.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WPF0001: the Fluent ThemeMode is marked experimental; CA1416: platform APIs are Windows-only by design. -->
+    <NoWarn>$(NoWarn);WPF0001;CA1416;CA1001;CA1515;CA1852;WFO0003</NoWarn>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Jevlet.Core\Jevlet.Core.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
-  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Data.OleDb" Version="10.0.12" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\jevlet.ico" />
+  </ItemGroup>
+
+  <!-- WinForms is here only for the tray icon; keep its names out of WPF code. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
 </Project>

@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Jevlet.Core;
@@ -22,6 +25,14 @@ public sealed class Catalogue
     public static Catalogue Shared { get; } = Load();
 
     public int Version { get; }
+
+    /// <summary>
+    /// SHA-256 of everything a model reads from this catalogue (questions, state format, option
+    /// names in order). Equals <c>catalogue_fingerprint</c> in jevlet/assistant/skills.py; a model
+    /// whose model.json carries another fingerprint was trained for other questions.
+    /// </summary>
+    public string Fingerprint { get; }
+
     public string SkillQuestion { get; }
     public string RiskQuestion { get; }
     public string NotApplicable { get; }
@@ -43,6 +54,7 @@ public sealed class Catalogue
     private Catalogue(JsonElement root)
     {
         Version = root.GetProperty("version").GetInt32();
+        Fingerprint = ComputeFingerprint(root);
         SkillQuestion = root.GetProperty("skill_question").GetString()!;
         RiskQuestion = root.GetProperty("risk_question").GetString()!;
         NotApplicable = root.GetProperty("not_applicable").GetString()!;
@@ -80,6 +92,41 @@ public sealed class Catalogue
         Skills = root.GetProperty("skills").EnumerateArray().Select(ParseSkill).ToList();
         ByKey = Skills.ToDictionary(s => s.Key);
         ByName = Skills.ToDictionary(s => s.Name);
+    }
+
+    internal static string ComputeFingerprint(JsonElement root)
+    {
+        static string Text(JsonElement row, string name) => row.GetProperty(name).GetString()!;
+        static string Joined(JsonElement row, string name) =>
+            row.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
+                ? string.Join(',', value.EnumerateArray().Select(v => v.GetString()))
+                : "";
+
+        List<string[]> rows =
+        [
+            ["version", root.GetProperty("version").GetInt32().ToString(CultureInfo.InvariantCulture)],
+            ["skill_question", Text(root, "skill_question")],
+            ["risk_question", Text(root, "risk_question")],
+            ["state_format", Text(root, "state_format")],
+            ["not_applicable", Text(root, "not_applicable")],
+        ];
+        foreach (var skill in root.GetProperty("skills").EnumerateArray())
+        {
+            rows.Add(["skill", Text(skill, "key"), Text(skill, "name"), Joined(skill, "slots"), Joined(skill, "optional_slots")]);
+        }
+        foreach (var slot in root.GetProperty("slots").EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+        {
+            rows.Add(["slot", slot.Name, slot.Value.GetString()!]);
+        }
+        foreach (var entry in root.GetProperty("catalogues").EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+        {
+            var names = entry.Value.ValueKind == JsonValueKind.Object
+                ? entry.Value.EnumerateObject().Select(p => p.Name)
+                : entry.Value.EnumerateArray().Select(v => v.ToString());
+            rows.Add(["catalogue", entry.Name, string.Join('\u001f', names)]);
+        }
+        var text = string.Join('\n', rows.Select(row => string.Join('\t', row)));
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     }
 
     private static Skill ParseSkill(JsonElement row)

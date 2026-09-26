@@ -86,41 +86,63 @@ public static class TextRules
         return grams;
     }
 
-    /// <summary>Blend of word overlap, character trigrams, and alias hits; 0 means unrelated.</summary>
-    public static double Similarity(string query, string name)
+    /// <summary>What similarity needs from the query, computed once per shortlist.</summary>
+    private sealed record QueryFeatures(HashSet<string> Words, HashSet<string> Grams, string[][] AliasTargets);
+
+    /// <summary>What similarity needs from a candidate name; names (apps, windows) repeat across keystrokes.</summary>
+    private sealed record NameFeatures(HashSet<string> Words, HashSet<string> Grams, string Lowered);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, NameFeatures> NameCache = new(StringComparer.Ordinal);
+
+    private static QueryFeatures ForQuery(string query)
     {
-        var queryWords = Words(query).ToHashSet(StringComparer.Ordinal);
-        var nameWords = Words(name).ToHashSet(StringComparer.Ordinal);
-        if (nameWords.Count == 0)
+        var lowered = Fold(query);
+        return new QueryFeatures(
+            Words(query).ToHashSet(StringComparer.Ordinal),
+            Trigrams(query),
+            Aliases.Where(alias => alias.Pattern.IsMatch(lowered)).Select(alias => alias.Targets).ToArray());
+    }
+
+    private static NameFeatures ForName(string name)
+    {
+        if (NameCache.TryGetValue(name, out var cached))
+        {
+            return cached;
+        }
+        if (NameCache.Count > 4096)
+        {
+            NameCache.Clear(); // file results churn; keep the cache bounded (Count takes every lock, so only on a miss)
+        }
+        return NameCache.GetOrAdd(name, static key => new NameFeatures(
+            Words(key).ToHashSet(StringComparer.Ordinal), Trigrams(key), Fold(key)));
+    }
+
+    private static double Score(QueryFeatures query, NameFeatures name)
+    {
+        if (name.Words.Count == 0)
         {
             return 0.0;
         }
-        var overlap = (double)queryWords.Count(nameWords.Contains) / nameWords.Count;
-        var gramsQuery = Trigrams(query);
-        var gramsName = Trigrams(name);
-        var trigram = (double)gramsName.Count(gramsQuery.Contains) / Math.Max(gramsName.Count, 1);
-        var alias = 0.0;
-        var loweredName = Fold(name);
-        var loweredQuery = Fold(query);
-        foreach (var (_, pattern, targets) in Aliases)
-        {
-            if (pattern.IsMatch(loweredQuery) && targets.Any(t => loweredName.Contains(t, StringComparison.Ordinal)))
-            {
-                alias = 0.8;
-                break;
-            }
-        }
+        var overlap = (double)query.Words.Count(name.Words.Contains) / name.Words.Count;
+        var trigram = (double)name.Grams.Count(query.Grams.Contains) / Math.Max(name.Grams.Count, 1);
+        var alias = query.AliasTargets.Any(targets => targets.Any(t => name.Lowered.Contains(t, StringComparison.Ordinal))) ? 0.8 : 0.0;
         return Math.Max(Math.Max(overlap, 0.6 * trigram), alias);
     }
 
+    /// <summary>Blend of word overlap, character trigrams, and alias hits; 0 means unrelated.</summary>
+    public static double Similarity(string query, string name) => Score(ForQuery(query), ForName(name));
+
     /// <summary>Top candidates by similarity; ties keep the caller's order.</summary>
-    public static IReadOnlyList<string> Shortlist(string query, IEnumerable<string> names, int limit = 8) =>
-        names.Select((name, index) => (Score: Similarity(query, name), Index: index, Name: name))
+    public static IReadOnlyList<string> Shortlist(string query, IEnumerable<string> names, int limit = 8)
+    {
+        var features = ForQuery(query);
+        return names.Select((name, index) => (Score: Score(features, ForName(name)), Index: index, Name: name))
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Index)
             .Take(limit)
             .Select(item => item.Name)
             .ToList();
+    }
 
     public static string StripCourtesy(string command) => Courtesy.Replace(command.Trim(), "", 1).Trim();
 

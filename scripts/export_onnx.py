@@ -19,6 +19,7 @@ import numpy as np
 from jevlet.assistant import benchmark_v2 as bench
 from jevlet.assistant.commands_synthetic import APP_POOL
 from jevlet.assistant.skills import (
+    CATALOGUE_PATH,
     SKILL_BY_KEY,
     SKILL_QUESTION,
     SKILLS,
@@ -29,7 +30,7 @@ from jevlet.assistant.skills import (
 )
 from jevlet.benchmarks import RISK_QUESTION, daily_state
 from jevlet.data import DecisionExample, Question
-from jevlet.onnx_export import export_onnx, graph_inputs, reference_logits
+from jevlet.onnx_export import catalogue_identity, export_onnx, graph_inputs, reference_logits
 from jevlet.training import load_checkpoint
 
 GOLDEN = Path("app/tests/Jevlet.Core.Tests/golden")
@@ -98,10 +99,32 @@ def main() -> None:
     parser.add_argument("checkpoint")
     parser.add_argument("output")
     parser.add_argument("--tolerance", type=float, default=2e-3)
+    parser.add_argument(
+        "--catalogue",
+        help="skills.json the checkpoint was trained with (default: shared/skills.json next to "
+        "the checkpoint, as in a Hugging Face release)",
+    )
     args = parser.parse_args()
     import onnxruntime as ort
 
-    info = export_onnx(args.checkpoint, args.output)
+    trained_with = (
+        Path(args.catalogue)
+        if args.catalogue
+        else Path(args.checkpoint).resolve().parent / "shared" / "skills.json"
+    )
+    if not trained_with.exists():
+        raise SystemExit(
+            f"{trained_with} not found: pass --catalogue with the skills.json this checkpoint was "
+            "trained with (the app refuses models without a catalogue identity)"
+        )
+    catalogue = json.loads(trained_with.read_text(encoding="utf-8"))
+    ours = catalogue_identity(json.loads(CATALOGUE_PATH.read_text(encoding="utf-8")))
+    if catalogue_identity(catalogue)["fingerprint"] != ours["fingerprint"]:
+        raise SystemExit(
+            f"{args.checkpoint} was trained for a different skill catalogue than "
+            f"{CATALOGUE_PATH}; the app would refuse it"
+        )
+    info = export_onnx(args.checkpoint, args.output, catalogue=catalogue)
     model, _ = load_checkpoint(args.checkpoint, "cpu")
     model = model.float().eval()
     session = ort.InferenceSession(
